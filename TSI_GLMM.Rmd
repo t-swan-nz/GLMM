@@ -1,0 +1,46 @@
+---
+title: "Untitled"
+author: "Tom Swan"
+date: "25/03/2021"
+output: html_document
+---
+
+Loading packages
+```{r}
+library(qtl)
+library(ggplot2)
+library(pscl)
+library(boot)
+library(psych) 
+library(stats) 
+library(MASS)
+library(car)
+library(lmtest)
+library(lme4)
+library(tidyverse)
+library(plyr)
+library(tibble)
+library(readxl)
+library(aods3)
+library(emmeans)
+
+```
+
+Importing the data
+```{r}
+
+TSI_data <- read.csv(file = "TSI_data.csv")
+
+```
+
+
+Running a GLMM with a negative binomial model
+```{r}
+
+glmer.nb(sugar ~ sex + (1|day) + (1|station), data = TSI_data)
+
+#is not singular. I will need to investigate how exactly to analysis this. 
+
+?isSingular
+```
+

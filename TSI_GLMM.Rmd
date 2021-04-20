@@ -11,13 +11,12 @@ library(car)
 library(lmtest)
 library(lme4)
 library(tidyverse)
-library(plyr)
 library(tibble)
-library(readxl)
 library(aods3)
 library(emmeans)
 library(MuMIn)
 library(DHARMa)
+library(blmeco)
 ```
 
 Importing the data
@@ -25,40 +24,44 @@ Importing the data
 TSI_data <- read.csv(file = "TSI_data.csv")
 ```
 
-Running a GLMM with a negative binomial family
-
-```{r}
-
-albo_n_b <- glmer.nb(sugar ~ time + sex + habitat + (1|day) + (1|station), data = TSI_data)
-summary(albo_n_b)
-Anova(albo_n_b)
-
-#check singularity
-tt <- getME(albo_n_b,"theta")
-ll <- getME(albo_n_b,"lower")
-min(tt[ll==0])
-
-#It appears that there is singularity in the data. If the fit is singular, there might be a higher chance of a false positive.
-
-#the ratio of residual deviance to df is ~1.5.
-#deviance df.resid 
-#2719.2     1803 
-
-
-albo_n_b_R2 <- r.squaredGLMM(albo_n_b)
-
-```
-
 Running a GLMM with binomial family 
 
 ```{r}
-albo_binomial <- glmer(sugar ~ time + sex + habitat + (1|day) + (1|station), family = binomial, data = TSI_data)
+albo_binomial <- glmer(sugar ~ time*sex* habitat + (1|day) + (1|station), family = binomial, data = TSI_data)
 summary(albo_binomial)
+
+#the dispersal parameter value is 1.11. According to dispersion_glmer(blmeco) - the square root of the scale parameter, according to recommendations by D. Bates, if its value is between 0.75 and 1.4, there may not be an overdispersion problem.
+dispersion_glmer(albo_binomial)
+
+##using DHARMa to investigate underdispersion and overdispersion
+
+albo_binomial_overdispersion <- simulateResiduals(albo_binomial, plot = T)
+
+residuals(albo_binomial_overdispersion)
+
+residuals(albo_binomial_overdispersion, quantileFunction = qnorm, outlierValues = c(-7,7))
+
+plot(albo_binomial_overdispersion)
+
+#QQ plot distribution test, dispersion test and outlier tests is not significant (good).
+
+#Statistical tests for dispersion
+
+testOverdispersion(albo_binomial_overdispersion)
+
+testDispersion(albo_binomial_overdispersion, alternative = "less", plot = FALSE) # only underdispersion))
+
+testDispersion(albo_binomial_overdispersion, alternative = "greater", plot = FALSE) # only oversispersion
+
+testDispersion(albo_binomial_overdispersion, type = "PearsonChisq", alternative = "greater")
+
+#overall there does not appear to be a problem with this data. 
+
 Anova(albo_binomial)
 
 #the ratio of residual deviance to df is ~1.2
 #deviance df.resid 
-#2323     1804 
+#2281     1800 
 
 albo_binomial_R2 <- r.squaredGLMM(albo_binomial)
 
@@ -66,61 +69,79 @@ albo_binomial_R2 <- r.squaredGLMM(albo_binomial)
 
 #tukey post hoc test
 
-Tukey_sugar_Binomial <- emmeans(albo_binomial, list(pairwise ~ time), adjust = "tukey")
+Tukey_sugar_Binomial <- emmeans(albo_binomial, list(pairwise ~ time*sex), adjust = "tukey")
 confint(Tukey_sugar_Binomial, level = 0.95)
 
 Tukey_sugar_Binomial
 
-#significant difference between time of day. But what if we only want to test this effect for males or ONLY for females?
+#significant difference between sugar presence in (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
 
-#Maybe we need to flesh this out as two datasets: 1 for females, 1 for males. 
+gof(albo_binomial)
+sum(residuals(albo_binomial,"pearson")^2)
+
+#residuals are very high - not a great thing.
 
 ```
 
-Running a GLMM with a poisson family
+Running a GLMM with negative binomial family 
+
 ```{r}
 
-albo_poisson <- glmer(sugar ~  time + sex + habitat + (1|day) + (1|station), family = poisson, data = TSI_data)
-summary(albo_poisson)
-Anova(albo_poisson)
-
-#looks like just time of day is significantly different.
-
+albo_n_b <- glmer.nb(sugar ~ time*sex* habitat + (1|day) + (1|station), data = TSI_data)
+#warning messages (bounday (singular), iteration limit reached boundary).
+summary(albo_n_b)
 #the ratio of residual deviance to df is ~1.5.
 #deviance df.resid 
-#2719.2     1804 
+#2692     1799 
 
-albo_poisson_R2 <- r.squaredGLMM(albo_poisson)
+dispersion_glmer(albo_n_b)
 
-#The model as a whole gives very low prediction of individual responses.
+#dispersion parameter is 0.82. This is considerably lower than the binomial family model. According to dispersion_glmer(blmeco) by D. Bates, if its value is between 0.75 and 1.4, there may not be an overdispersion problem. Examination of the residuals is required though. 
 
-#using DHARMa to investigate underdispersion and overdispersion
+##using DHARMa to investigate underdispersion and overdispersion
 
-albo_poisson_overdispersion <- simulateResiduals(albo_poisson, plot = F)
+albo_n_b_overdispersion <- simulateResiduals(albo_n_b, plot = T)
 
-residuals(albo_poisson_overdispersion)
+residuals(albo_n_b_overdispersion)
 
-residuals(albo_poisson_overdispersion, quantileFunction = qnorm, outlierValues = c(-7,7))
+residuals(albo_n_b_overdispersion, quantileFunction = qnorm, outlierValues = c(-7,7))
 
-plot(albo_poisson_overdispersion)
+plot(albo_n_b_overdispersion)
 
-testOverdispersion(albo_poisson_overdispersion)
+#QQ plot distribution test, dispersion test and outlier tests to be significant for the negative binomial model (not great)
 
-testDispersion(albo_poisson_overdispersion, alternative = "less", plot = FALSE) # only underdispersion))
+testOverdispersion(albo_n_b_overdispersion)
 
-testDispersion(albo_poisson_overdispersion, alternative = "greater", plot = FALSE) # only oversispersion
+testDispersion(albo_n_b_overdispersion, alternative = "less", plot = FALSE) # only underdispersion))
 
-testDispersion(albo_poisson_overdispersion, type = "PearsonChisq", alternative = "greater")
+testDispersion(albo_n_b_overdispersion, alternative = "greater", plot = FALSE) # only oversispersion
 
-testOutliers(albo_poisson_overdispersion, alternative = c("two.sided", "greater",
+testDispersion(albo_n_b_overdispersion, type = "PearsonChisq", alternative = "greater")
+
+testOutliers(albo_n_b_overdispersion, alternative = c("two.sided", "greater",
   "less"), margin = c("both", "upper", "lower"), type = c("default",
   "bootstrap", "binomial"), nBoot = 100, plot = T)
 
-#looks like there is some overdispersion - investigate this more. 
+Anova(albo_n_b)
+
+#It appears that there is singularity in the data. If the fit is singular, there might be a higher chance of a false positive.
+
+albo_n_b_R2 <- r.squaredGLMM(albo_n_b)
+
+#tukey post hoc test
+
+Tukey_sugar_albo_n_b <- emmeans(albo_n_b, list(pairwise ~ time*sex), adjust = "tukey")
+confint(Tukey_sugar_albo_n_b, level = 0.95)
+
+Tukey_sugar_albo_n_b
+
+#significant difference between sugar positive for (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
+
+#these results are the same as the binomial family, but the (i) has a slightly higher, albeit still significant, p value.  
 
 ```
 
-Compare the residuals between all the models
+Comparison of the two models
 ```{r}
 #compare the residuals between models
 
@@ -130,14 +151,11 @@ sum(residuals(albo_n_b,"pearson")^2)
 #binomial - residuals 1788
 sum(residuals(albo_binomial,"pearson")^2)
 
-#poisson - residuals 1062.
-sum(residuals(albo_poisson,"pearson")^2)
-
 #compare AIC weights between models:
 
-AIC(albo_binomial, albo_n_b, albo_poisson)
+AIC(albo_binomial, albo_n_b)
 
-#the binomial model has the lowest AIC weight.
+#the binomial model has the lower AIC weight.
 
 #Compare the R2 between different models
 
@@ -147,72 +165,11 @@ albo_n_b_R2
 #binomial
 albo_binomial_R2
 
-
-#poisson
-albo_poisson_R2
-
 #CONCLUSION 
 
-#the binomial model has the lowest AIC weights, but the highest residuals (most overdispersed). None of the models do a great job at predicting the proportion of variance explained by the model as a whole (low R2) for "R2c".
-
+#the binomial model has the lowest AIC weights, but the highest residuals. I think it might be a better fit for the data, considering the results from DHARMa in finding the QQ plot distribution test, dispersion test and outlier tests to be not significant. These tests were significant for the negative binomial model (not great). 
 ```
 
-Fitting only the male mosquitoes (using binomial model)
-```{r}
-
-TSI_data_male <- read.csv(file = "TSI_data_male.csv")
-
-male_albo_binomial <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_male)
-summary(male_albo_binomial)
-Anova(male_albo_binomial)
-
-#the binomial models has a lower AIC.
-
-r.squaredGLMM(male_albo_binomial)
-
-
-#testing for overdispersion with the negative binomial model
-
-overdisp_Binomial_male <- gof(male_albo_binomial)
-sum(residuals(overdisp_Binomial_male,"pearson")^2)
-
-#tukey post hoc test
-
-Tukey_sugar_NB_male <- emmeans(male_albo_binomial, list(pairwise ~ time), adjust = "tukey")
-confint(Tukey_sugar_NB_male, level = 0.95)
-
-Tukey_sugar_NB_male
-
-# significant difference between sugar fed status by time of day
-
-```
-Fitting only the female mosquitoes (using binomial model)
-
-```{r}
-TSI_data_female <- read.csv(file = "TSI_data_female.csv")
-
-female_albo_binomial <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_female)
-summary(female_albo_binomial)
-Anova(female_albo_binomial)
-
-#the binomial models has a lower AIC.
-
-r.squaredGLMM(female_albo_binomial)
-
-#testing for overdispersion with the negative binomial model
-
-overdisp_NB_female <- gof(female_albo_binomial)
-sum(residuals(overdisp_NB_female,"pearson")^2)
-
-#tukey post hoc test
-
-Tukey_sugar_NB_female <- emmeans(female_albo_binomial, list(pairwise ~ time), adjust = "tukey")
-confint(Tukey_sugar_NB_female, level = 0.95)
-
-Tukey_sugar_NB_female
-
-#this shows that the time of day that they were sugar fed was significantly different for females. 
-```
 
 
 

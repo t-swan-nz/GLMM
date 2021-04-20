@@ -17,6 +17,7 @@ library(readxl)
 library(aods3)
 library(emmeans)
 library(MuMIn)
+library(DHARMa)
 ```
 
 Importing the data
@@ -24,76 +25,120 @@ Importing the data
 TSI_data <- read.csv(file = "TSI_data.csv")
 ```
 
+Running a GLMM with a negative binomial family
+
+```{r}
+
+albo_n_b <- glmer.nb(sugar ~ time + sex + habitat + (1|day) + (1|station), data = TSI_data)
+summary(albo_n_b)
+Anova(albo_n_b)
+
+#check singularity
+tt <- getME(albo_n_b,"theta")
+ll <- getME(albo_n_b,"lower")
+min(tt[ll==0])
+
+#It appears that there is singularity in the data. If the fit is singular, there might be a higher chance of a false positive.
+
+#the ratio of residual deviance to df is ~1.5.
+#deviance df.resid 
+#2719.2     1803 
+
+```
+
 Running a GLMM with binomial family 
 
 ```{r}
-albo_binomial_2_rand_effect <- glmer(sugar ~ time + sex + habitat + (1|day) + (1|station), family = binomial, data = TSI_data)
-summary(albo_binomial_2_rand_effect)
-Anova(albo_binomial_2_rand_effect)
+albo_binomial <- glmer(sugar ~ time + sex + habitat + (1|day) + (1|station), family = binomial, data = TSI_data)
+summary(albo_binomial)
+Anova(albo_binomial)
 
-#the binomial models has a lower AIC.
+#the ratio of residual deviance to df is ~1.2
+#deviance df.resid 
+#2323     1804 
 
-r.squaredGLMM(albo_binomial_2_rand_effect)
+r.squaredGLMM(albo_binomial)
 
-#The model as a whole gives very good prediction of individual responses, in this case almost all the predictive value comes from the random effects rather than the fixed effects 
-#testing for overdispersion with the negative binomial model
-
-overdisp_NB <- gof(albo_binomial_2_rand_effect)
-sum(residuals(overdisp_NB,"pearson")^2)
+#The model as a whole gives very low prediction of individual responses.
 
 #tukey post hoc test
 
-Tukey_sugar_NB <- emmeans(albo_binomial_2_rand_effect, list(pairwise ~ time), adjust = "tukey")
-confint(Tukey_sugar_NB, level = 0.95)
+Tukey_sugar_Binomial <- emmeans(albo_binomial, list(pairwise ~ time), adjust = "tukey")
+confint(Tukey_sugar_Binomial, level = 0.95)
 
-Tukey_sugar_NB
+Tukey_sugar_Binomial
 
 #significant difference between time of day. But what if we only want to test this effect for males or ONLY for females?
+
 #Maybe we need to flesh this out as two datasets: 1 for females, 1 for males. 
-
-#option 1: Include a dataset where only mosquitoes that were sugar fed were included in the analysis (to further understand factors indlucing the magnitude of sugar feeding). Call this: "TSI_data_positive"
-
-#option 2: split this by male and female.
 
 ```
 
 Running a GLMM with a poisson family
 ```{r}
 
-#try with just one random effect:
-
-albo_poisson_glmer_2_rand_effect <- glmer(sugar ~  time + sex + habitat + (1|day) + (1|station), family = poisson, data = TSI_data)
-summary(albo_poisson_glmer_2_rand_effect)
-Anova(albo_poisson_glmer_2_rand_effect)
+albo_poisson <- glmer(sugar ~  time + sex + habitat + (1|day) + (1|station), family = poisson, data = TSI_data)
+summary(albo_poisson)
+Anova(albo_poisson)
 
 #looks like just time of day is significantly different.
 
-r.squaredGLMM(albo_poisson_glmer_2_rand_effect)
+#the ratio of residual deviance to df is ~1.5.
+#deviance df.resid 
+#2719.2     1804 
 
-#The model as a whole gives very good prediction of individual responses, in this case almost all the predictive value comes from the random effects rather than the fixed effects 
+r.squaredGLMM(albo_poisson)
 
-#try a poisson model
+#The model as a whole gives very low prediction of individual responses.
 
-albo_poisson_glmer_1_rand_effect <- glmer(sugar ~  time + sex + habitat + (1|day) , family = poisson, data = TSI_data)
-summary(albo_poisson_glmer_1_rand_effect)
-Anova(albo_poisson_glmer_1_rand_effect)
+#using DHARMa to investigate underdispersion and overdispersion
 
-#investigate the obtain an estimate of what proportion of the variation in response was due to the fixed effects and what proportion was due to the random effects by using a “pseudo-Rsquared” function provided
+albo_poisson_overdispersion <- simulateResiduals(albo_poisson, plot = F)
 
-r.squaredGLMM(albo_poisson_glmer_1_rand_effect)
+residuals(albo_poisson_overdispersion)
 
-#R2m = R2m column gives the proportion of variance in the response which is explained by the fixed effects.
+residuals(albo_poisson_overdispersion, quantileFunction = qnorm, outlierValues = c(-7,7))
 
-#R2c = The R2c column gives the proportion explained by the model as a whole.
+plot(albo_poisson_overdispersion)
 
-#The AIC weights is less for the model with two random effects. 
+testOverdispersion(albo_poisson_overdispersion)
+
+testDispersion(albo_poisson_overdispersion, alternative = "less", plot = FALSE) # only underdispersion))
+
+testDispersion(albo_poisson_overdispersion, alternative = "greater", plot = FALSE) # only oversispersion
+
+testDispersion(albo_poisson_overdispersion, type = "PearsonChisq", alternative = "greater")
+
+testOutliers(albo_poisson_overdispersion, alternative = c("two.sided", "greater",
+  "less"), margin = c("both", "upper", "lower"), type = c("default",
+  "bootstrap", "binomial"), nBoot = 100, plot = T)
+
+#looks like there is some overdispersion - investigate this more. 
 
 ```
 
-Compare the residuals between the models
+Compare the residuals between all the models
 ```{r}
+#compare the residuals between models
 
+#negative binomial - residuals 1062
+sum(residuals(albo_n_b,"pearson")^2)
 
+#binomial - residuals 1788
+sum(residuals(albo_binomial,"pearson")^2)
+
+#poisson - residuals 1062.
+sum(residuals(albo_poisson,"pearson")^2)
+
+#compare AIC weights between models:
+
+AIC(albo_binomial, albo_n_b, albo_poisson)
+
+#the binomial model has the lowest AIC weight.
+
+#CONCLUSION 
+
+#the binomial model has the lowest AIC weights, but the highest residuals (most overdispersed). None of the models do a great job at predicting the proportion of variance explained by the model as a whole (low R2).
 
 ```
 
@@ -102,24 +147,23 @@ Fitting only the male mosquitoes
 
 TSI_data_male <- read.csv(file = "TSI_data_male.csv")
 
-male_albo_binomial_2_rand_effect <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_male)
-summary(male_albo_binomial_2_rand_effect)
-Anova(male_albo_binomial_2_rand_effect)
+male_albo_binomial <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_male)
+summary(male_albo_binomial)
+Anova(male_albo_binomial)
 
 #the binomial models has a lower AIC.
 
-r.squaredGLMM(male_albo_binomial_2_rand_effect)
+r.squaredGLMM(male_albo_binomial)
 
-#The model as a whole gives very good prediction of individual responses, in this case almost all the predictive value comes from the random effects rather than the fixed effects 
 
 #testing for overdispersion with the negative binomial model
 
-overdisp_NB_male <- gof(male_albo_binomial_2_rand_effect)
-sum(residuals(overdisp_NB_male,"pearson")^2)
+overdisp_Binomial_male <- gof(male_albo_binomial)
+sum(residuals(overdisp_Binomial_male,"pearson")^2)
 
 #tukey post hoc test
 
-Tukey_sugar_NB_male <- emmeans(male_albo_binomial_2_rand_effect, list(pairwise ~ time), adjust = "tukey")
+Tukey_sugar_NB_male <- emmeans(male_albo_binomial, list(pairwise ~ time), adjust = "tukey")
 confint(Tukey_sugar_NB_male, level = 0.95)
 
 Tukey_sugar_NB_male
@@ -132,29 +176,27 @@ Fitting only the female mosquitoes
 ```{r}
 TSI_data_female <- read.csv(file = "TSI_data_female.csv")
 
-female_albo_binomial_2_rand_effect <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_female)
-summary(female_albo_binomial_2_rand_effect)
-Anova(female_albo_binomial_2_rand_effect)
+female_albo_binomial <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_female)
+summary(female_albo_binomial)
+Anova(female_albo_binomial)
 
 #the binomial models has a lower AIC.
 
-r.squaredGLMM(female_albo_binomial_2_rand_effect)
-
-#The model as a whole gives very good prediction of individual responses, in this case almost all the predictive value comes from the random effects rather than the fixed effects 
+r.squaredGLMM(female_albo_binomial)
 
 #testing for overdispersion with the negative binomial model
 
-overdisp_NB_female <- gof(female_albo_binomial_2_rand_effect)
+overdisp_NB_female <- gof(female_albo_binomial)
 sum(residuals(overdisp_NB_female,"pearson")^2)
 
 #tukey post hoc test
 
-Tukey_sugar_NB_female <- emmeans(female_albo_binomial_2_rand_effect, list(pairwise ~ time), adjust = "tukey")
+Tukey_sugar_NB_female <- emmeans(female_albo_binomial, list(pairwise ~ time), adjust = "tukey")
 confint(Tukey_sugar_NB_female, level = 0.95)
 
 Tukey_sugar_NB_female
 
-#this shows that the time of day was significantly different for both the males and females. 
+#this shows that the time of day that they were sugar fed was significantly different for females. 
 ```
 
 

@@ -44,6 +44,9 @@ min(tt[ll==0])
 #deviance df.resid 
 #2719.2     1803 
 
+
+albo_n_b_R2 <- r.squaredGLMM(albo_n_b)
+
 ```
 
 Running a GLMM with binomial family 
@@ -57,7 +60,7 @@ Anova(albo_binomial)
 #deviance df.resid 
 #2323     1804 
 
-r.squaredGLMM(albo_binomial)
+albo_binomial_R2 <- r.squaredGLMM(albo_binomial)
 
 #The model as a whole gives very low prediction of individual responses.
 
@@ -87,7 +90,7 @@ Anova(albo_poisson)
 #deviance df.resid 
 #2719.2     1804 
 
-r.squaredGLMM(albo_poisson)
+albo_poisson_R2 <- r.squaredGLMM(albo_poisson)
 
 #The model as a whole gives very low prediction of individual responses.
 
@@ -136,13 +139,25 @@ AIC(albo_binomial, albo_n_b, albo_poisson)
 
 #the binomial model has the lowest AIC weight.
 
+#Compare the R2 between different models
+
+#negative binomial
+albo_n_b_R2
+
+#binomial
+albo_binomial_R2
+
+
+#poisson
+albo_poisson_R2
+
 #CONCLUSION 
 
-#the binomial model has the lowest AIC weights, but the highest residuals (most overdispersed). None of the models do a great job at predicting the proportion of variance explained by the model as a whole (low R2).
+#the binomial model has the lowest AIC weights, but the highest residuals (most overdispersed). None of the models do a great job at predicting the proportion of variance explained by the model as a whole (low R2) for "R2c".
 
 ```
 
-Fitting only the male mosquitoes
+Fitting only the male mosquitoes (using binomial model)
 ```{r}
 
 TSI_data_male <- read.csv(file = "TSI_data_male.csv")
@@ -171,7 +186,7 @@ Tukey_sugar_NB_male
 # significant difference between sugar fed status by time of day
 
 ```
-Fitting only the female mosquitoes 
+Fitting only the female mosquitoes (using binomial model)
 
 ```{r}
 TSI_data_female <- read.csv(file = "TSI_data_female.csv")

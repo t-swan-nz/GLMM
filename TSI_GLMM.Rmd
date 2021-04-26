@@ -19,13 +19,12 @@ library(MuMIn)
 library(DHARMa)
 library(blmeco)
 library(cowplot)
+library(ResourceSelection)
 ```
 
 Importing the data
 ```{r}
 TSI_data <- read.csv(file = "TSI_data.csv")
-
-
 ```
 
 Summary statistics
@@ -63,6 +62,11 @@ TSI_data_plots %>% ggplot() +
   geom_point(aes(x=habitat, y=fructose_concentration, color=sex))
 
 
+#fructose concentration - by male and female for each habitat type. Maybe difference between Male and Female for urban environment?
+
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=fructose_concentration)) + geom_bar(position="dodge") 
+
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
 
 #final figures examples
 
@@ -72,15 +76,28 @@ TSI_data_plots %>% ggplot() +
 
 TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
 
+#this graph here shows proportion.
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
 #Figure 2: 
 #Quite interesting. Our physiological examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet. 
 
+#this graph shows count
+
 TSI_data_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+#this graph here shows proportion.
+
+TSI_data_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="fill")+ labs(x= "Visual examination", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
 
 #Figure 3: Habitat, sex and sugar
 TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
 
-#there is no statistical difference between male and female sugar positivity in urban environment
+#This graph shows proportion
+
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#there is no statistical difference between male and female sugar positivity in either the urban or bush habitat types.
 
 ```
 
@@ -90,172 +107,23 @@ Running a GLMM with binomial family
 ```{r}
 
 #consider changing the terms to all interactions. Await Rhondda's feedback re: model. 
-albo_binomial <- glmer(sugar ~ time*sex + habitat* (1|day) + (1|station), family = binomial, data = TSI_data)
+albo_binomial <- glmer(sugar ~ time*sex*habitat + (1|day) + (1|station), family = binomial, data = TSI_data)
 summary(albo_binomial)
-
-#the dispersal parameter value is 1.11. According to dispersion_glmer(blmeco) - the square root of the scale parameter, according to recommendations by D. Bates, if its value is between 0.75 and 1.4, there may not be an overdispersion problem.
-dispersion_glmer(albo_binomial)
-
-##using DHARMa to investigate underdispersion and overdispersion
-
-albo_binomial_overdispersion <- simulateResiduals(albo_binomial, plot = T)
-
-residuals(albo_binomial_overdispersion)
-
-residuals(albo_binomial_overdispersion, quantileFunction = qnorm, outlierValues = c(-7,7))
-
-plot(albo_binomial_overdispersion)
-
-#QQ plot distribution test, dispersion test and outlier tests is not significant (good).
-
-#Statistical tests for dispersion
-
-testOverdispersion(albo_binomial_overdispersion)
-
-testDispersion(albo_binomial_overdispersion, alternative = "less", plot = FALSE) # only underdispersion))
-
-testDispersion(albo_binomial_overdispersion, alternative = "greater", plot = FALSE) # only oversispersion
-
-testDispersion(albo_binomial_overdispersion, type = "PearsonChisq", alternative = "greater")
-
-#overall there does not appear to be a problem with this data. 
-
 Anova(albo_binomial)
-
-#the ratio of residual deviance to df is ~1.2
-#deviance df.resid 
-#2281     1800 
-
-albo_binomial_R2 <- r.squaredGLMM(albo_binomial)
-
-#The model as a whole gives very low prediction of individual responses.
 
 #tukey post hoc test
 
 Tukey_sugar_Binomial <- emmeans(albo_binomial, list(pairwise ~ time+sex), adjust = "tukey")
-confint(Tukey_sugar_Binomial, level = 0.95)
+#confint(Tukey_sugar_Binomial, level = 0.95)
 
 Tukey_sugar_Binomial
 
 #significant difference between sugar presence in (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
 
-gof(albo_binomial)
-sum(residuals(albo_binomial,"pearson")^2)
+#Hosmer and Lemeshow goodness of fit (GOF) test - is there a significant difference in the distribution of positive values from what the model predicts. 
 
-#residuals are very high - not a great thing.
+hoslem.test(TSI_data$sugar, fitted(albo_binomial))
 
-#running the GLMM with all the interaction effects:
-
-albo_binomial_3_interactions <- glmer(sugar ~ time*sex*habitat* (1|day) + (1|station), family = binomial, data = TSI_data)
-summary(albo_binomial_3_interactions)
-Anova(albo_binomial_3_interactions)
-
-#only stats differences are between time of day and sex. 
-
-#running a GLMM with just one factor - this shows that habitat on its own is significantly different
-
-albo_habitat_glmm <- glmer(sugar ~ habitat + (1|day) + (1|station), family = binomial, data = TSI_data)
-summary(albo_habitat_glmm)
-Anova(albo_habitat_glmm)
-
-albo_habitat_sex_glmm <- glmer(sugar ~ habitat*sex + (1|day) + (1|station), family = binomial, data = TSI_data)
-summary(albo_habitat_sex_glmm)
-Anova(albo_habitat_sex_glmm)
-
-Tukey_habitat_sex_sugar_Binomial <- emmeans(albo_habitat_sex_glmm, list(pairwise ~ habitat*sex), adjust = "tukey")
-confint(Tukey_habitat_sex_sugar_Binomial, level = 0.95)
-
-#looks like sig difference bt
+#data:  TSI_data$sugar, fitted(albo_binomial)
+#X-squared = 15.437, df = 8, p-value > 0.05119
 ```
-
-Running a GLMM with negative binomial family 
-
-```{r}
-
-albo_n_b <- glmer.nb(sugar ~ time*sex* habitat + (1|day) + (1|station), data = TSI_data)
-#warning messages (bounday (singular), iteration limit reached boundary).
-summary(albo_n_b)
-#the ratio of residual deviance to df is ~1.5.
-#deviance df.resid 
-#2692     1799 
-
-dispersion_glmer(albo_n_b)
-
-#dispersion parameter is 0.82. This is considerably lower than the binomial family model. According to dispersion_glmer(blmeco) by D. Bates, if its value is between 0.75 and 1.4, there may not be an overdispersion problem. Examination of the residuals is required though. 
-
-##using DHARMa to investigate underdispersion and overdispersion
-
-albo_n_b_overdispersion <- simulateResiduals(albo_n_b, plot = T)
-
-residuals(albo_n_b_overdispersion)
-
-residuals(albo_n_b_overdispersion, quantileFunction = qnorm, outlierValues = c(-7,7))
-
-plot(albo_n_b_overdispersion)
-
-#QQ plot distribution test, dispersion test and outlier tests to be significant for the negative binomial model (not great)
-
-testOverdispersion(albo_n_b_overdispersion)
-
-testDispersion(albo_n_b_overdispersion, alternative = "less", plot = FALSE) # only underdispersion))
-
-testDispersion(albo_n_b_overdispersion, alternative = "greater", plot = FALSE) # only oversispersion
-
-testDispersion(albo_n_b_overdispersion, type = "PearsonChisq", alternative = "greater")
-
-testOutliers(albo_n_b_overdispersion, alternative = c("two.sided", "greater",
-  "less"), margin = c("both", "upper", "lower"), type = c("default",
-  "bootstrap", "binomial"), nBoot = 100, plot = T)
-
-Anova(albo_n_b)
-
-#It appears that there is singularity in the data. If the fit is singular, there might be a higher chance of a false positive.
-
-albo_n_b_R2 <- r.squaredGLMM(albo_n_b)
-
-#tukey post hoc test
-
-Tukey_sugar_albo_n_b <- emmeans(albo_n_b, list(pairwise ~ time*sex), adjust = "tukey")
-confint(Tukey_sugar_albo_n_b, level = 0.95)
-
-Tukey_sugar_albo_n_b
-
-#significant difference between sugar positive for (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
-
-#these results are the same as the binomial family, but the (i) has a slightly higher, albeit still significant, p value.  
-
-```
-
-Comparison of the two models
-```{r}
-#compare the residuals between models
-
-#negative binomial - residuals 1062
-sum(residuals(albo_n_b,"pearson")^2)
-
-#binomial - residuals 1788
-sum(residuals(albo_binomial,"pearson")^2)
-
-#compare AIC weights between models:
-
-AIC(albo_binomial, albo_n_b)
-
-#the binomial model has the lower AIC weight.
-
-#Compare the R2 between different models
-
-#negative binomial
-albo_n_b_R2
-
-#binomial
-albo_binomial_R2
-
-#CONCLUSION 
-
-#the binomial model has the lowest AIC weights, but the highest residuals. I think it might be a better fit for the data, considering the results from DHARMa in finding the QQ plot distribution test, dispersion test and outlier tests to be not significant. These tests were significant for the negative binomial model (not great). 
-```
-
-
-
-
-

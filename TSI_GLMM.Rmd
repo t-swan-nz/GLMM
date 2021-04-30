@@ -21,6 +21,7 @@ library(blmeco)
 library(cowplot)
 library(ResourceSelection)
 library(ggrepel)
+library(arm)
 
 ```
 
@@ -45,7 +46,7 @@ str(nd_TSI_data_plots)
 #add the sample size to each plot
 
 nd_TSI_data_plots_sum <- nd_TSI_data_plots %>% 
-                         group_by(sugar,sex, habitat) %>% 
+                         group_by(sugar,sex, habitat,time) %>% 
                          summarise(samp = n())
   
 nd_TSI_data_plots_sum
@@ -92,46 +93,122 @@ nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(positi
 #this graph here shows proportion.
 nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
 
-#try with the n data
-nd_TSI_data_plots_sum %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
-
-
 #more males were captured for sugar positive in the morning. 
 
 #Figure 2: 
-#Quite interesting. Our physiological examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet. 
+#Quite interesting. Our physiological visual examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet very well. 
 
-#this graph shows count
+#count
 
 nd_TSI_data_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
 
-#this graph here shows proportion.
+nd_TSI_data_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+
+#proportion.
 
 nd_TSI_data_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="fill")+ labs(x= "Visual examination", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) + theme_cowplot()
 
 #Figure 3: Habitat, sex and sugar
+#count
+
 nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
 
+#add mean + standard error.
+
+#proportion
+
+nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot() 
+
+
 #try adding the geom_text information with the nd_TSI_plots_sum text 
-ggplot(nd_TSI_data_plots, mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ geom_text_repel(data= nd_TSI_data_plots_sum, mapping = aes(label=samp, y= 50)) + theme_cowplot()
+#ggplot(nd_TSI_data_plots, mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ geom_text_repel(data= nd_TSI_data_plots_sum, mapping = aes(label=samp, y= 50)) + theme_cowplot()
 
 #this seems to work - repeling the labels. 
 
-#This graph shows proportion
+#Geom point 0s , 1s to examine the spread of the data 
 
-nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot() + 
+
+nd_TSI_data_plots_sum %>% ggplot() + geom_point(aes(y= sugar, x=sex), position="nudge", size=3, alpha=0.3)
+
+#maybe just sex and time
+
+nd_TSI_data_plots_sum_new <- nd_TSI_data_plots %>% 
+                         group_by(sugar,sex, habitat,time) %>% 
+                         summarise(average_sugar = mean(sugar), n=n())
+
+TSI_sugar_stats <- describeBy(nd_TSI_data_plots$station, nd_TSI_data_plots$sugar, mat=T)
+
+
+male_female_counts <-read.csv("TSI_male_female_counts.csv")
+
+TSI_sugar_stats <- describeBy(male_female_counts$sex, male_female_counts$sugar, mat=T)
+
+```
+
+```{r}
+data(sat.act)
+describeBy(sat.act,sat.act$gender) #just one grouping variable	
+describeBy(sat.act,list(sat.act$gender,sat.act$education))  #two grouping variables
+des.mat <- describeBy(sat.act$age,sat.act$education,mat=TRUE) #matrix (data.frame) output 
+des.mat <- describeBy(sat.act$age,list(sat.act$education,sat.act$gender),
+             mat=TRUE,digits=2)  #matrix output
+```
+
+
+
+Pairwise comparisons without the habitat interaction
+```{r}
+no_iteraction_albo_binomial_nd <- glmer(sugar ~ time*sex+habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data)
+summary(no_iteraction_albo_binomial_nd)
+Anova(no_iteraction_albo_binomial_nd)
+
+hoslem.test(albo_control_TSI_data$sugar, fitted(no_iteraction_albo_binomial_nd))
+```
+
+Pairwise comparisons without the habitat interaction
+```{r}
+no_habitat_TSI.emm <- emmeans(no_iteraction_albo_binomial_nd, ~ time*sex+habitat)
+contrast(no_habitat_TSI.emm, "poly")
+contrast(no_habitat_TSI.emm, adjust = "Tukey")
+
+pairs(no_habitat_TSI.emm)
+contrast(no_habitat_TSI.emm, "eff", by = NULL, combine=T) 
+
+no_iteraction_albo_habitat_Tukey_sugar_Binomial <- emmeans(no_iteraction_albo_binomial_nd, list(pairwise ~ habitat+time*sex), adjust = "tukey")
+#confint(Tukey_sugar_Binomial, level = 0.95)
+
+no_iteraction_albo_habitat_Tukey_sugar_Binomial
+
+#Another way of viewing the table
+
+pairs(no_habitat_TSI.emm, simple = "sex", reverse=T)
+
+#Significant differences in the proportion of sugar fed Females and Male mosquitoes captured in the bush habitat in the morning only.
+
+pairs(no_habitat_TSI.emm, simple = "time", reverse=T) 
+
+#significant difference in the proportion of sugar fed (i) between female mosquitoes captured in the bush between morning and afternoon sampling events (ii) Males captured in the bush between morning and afternoon sampling events (iii) Males captured in urban environments between the morning and afternoon sampling events.
+
+pairs(no_habitat_TSI.emm, simple = "habitat", reverse=T) 
+#why are the z.ratios all the same?
+
+
 
 ```
 
 
-Running a GLMM with the new data.
-```{r}
 
-albo_binomial_nd <- glmer(sugar ~ time*sex*habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data)
+```{r}
+albo_binomial_nd <- glmer(sugar ~ time*sex *habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data)
 summary(albo_binomial_nd)
 Anova(albo_binomial_nd)
 
+#all the interactions with habitat was ns, so was removed
+#maybe a binomial 
+
 #appears to be significant differences between (i) time (ii) sex (iii) habitat (iv) time:sex
+#I will need to examine each difference (pairs function)
 #tukey post hoc test
 
 albo_Tukey_sugar_Binomial <- emmeans(albo_binomial_nd, list(pairwise ~ time*sex*habitat), adjust = "tukey")
@@ -139,38 +216,76 @@ albo_Tukey_sugar_Binomial <- emmeans(albo_binomial_nd, list(pairwise ~ time*sex*
 
 albo_Tukey_sugar_Binomial
 
-str(albo_Tukey_sugar_Binomial)
-
-
 hoslem.test(albo_control_TSI_data$sugar, fitted(albo_binomial_nd))
+
+#Hosmer and Lemeshow goodness of fit (GOF) test - is there no significant difference in the distribution of positive values from what the model predicts. There is no statistical evidence to suggest that the model is mis-specified.
 
 ```
 
 Visualising the nature of the interactions 
 
-Matrices
 ```{r}
-pwpm(TSI.emm)
+# https://cran.r-project.org/web/packages/emmeans/vignettes/interactions.html
 
+TSI.emm <- emmeans(albo_binomial_nd, ~ time*sex*habitat)
+contrast(TSI.emm, "poly")
+contrast(TSI.emm, adjust = "Tukey")
 
-#Cohen's d effect size.
+pairs(TSI.emm)
+contrast(TSI.emm, "eff", by = NULL, combine=T) 
 
-eff_size(TSI.emm, sigma = sigma(albo_binomial_nd), edf = Inf)
+contrast
+#investigating the fixed factors by each other factor
 
+pairs(TSI.emm, simple = "sex", reverse=T)
 
+#Significant differences in the proportion of sugar fed Females and Male mosquitoes captured in the bush habitat in the morning only.
+
+pairs(TSI.emm, simple = "time", reverse=T) 
+
+#significant difference in the proportion of sugar fed (i) between female mosquitoes captured in the bush between morning and afternoon sampling events (ii) Males captured in the bush between morning and afternoon sampling events (iii) Males captured in urban environments between the morning and afternoon sampling events.
+
+#is there more sugar feeding in the bush or urban areas?
+
+pairs(TSI.emm, simple = "habitat", reverse=T) 
+
+#significant difference in the proportion of sugar fed between female mosquitoes captured in the afternoon between the bush and urban locations. 
+
+#using joint tests to look at the nature of the interactions
+
+#overall this suggests (i) that there is a significant difference between the time of day and sugar feeding (ii) significant difference between male and female sugar feeding at different times of the day.
+
+joint_tests(TSI.emm, by = "sex")
+
+joint_tests(TSI.emm, by = "habitat")
+
+joint_tests(TSI.emm, by = "time")
+
+#the pairs comparisons are more informative as they go into the nature of the interactions. 
 ```
 
 Graphical comparisons
 ```{r}
 plot(TSI.emm, comparisons = T)
 
-#The blue bars are confidence intervals for the EMMs, and the red arrows are for the comparisons among them. If an arrow from one mean overlaps an arrow from another group, the difference is not “significant,” based on the adjust setting (which defaults to "tukey") and the value of alpha (which defaults to 0.05)
+#The blue bars are confidence intervals for the EMMs, and the red arrows are for the comparisons among them. If an arrow from one mean (black dot) overlaps an arrow from another group, the difference is not “significant,” based on the adjust setting (which defaults to "tukey") and the value of alpha (which defaults to 0.05)
 
-#what stands out here to me is (i) Morning male Bush - Afternoon male bush (ii) Morning Female bush - Afternoon female bush.
+#what stands out here to me is agreed with in the above comparisons using pairs() - (i) Morning male Bush - Afternoon male bush (ii) Morning Female bush - Afternoon female bush.
 
 #Note: Don’t ever use confidence intervals for EMMs to perform comparisons; they can be very misleading. Use the comparison arrows instead; or better yet, use pwpp().
 
 #A caution: it really is not good practice to draw a bright distinction based on whether or not a P value exceeds some cutoff. This display does dim such distinctions somewhat by allowing the viewer to judge whether a P value is close to alpha one way or the other; but a better strategy is to simply obtain all the P values using pairs(), and look at them individually.
+
+```
+
+Matrices and effect size
+```{r}
+pwpm(TSI.emm)
+
+#Cohen's d effect size. To measure the strength of the relationship. 
+
+eff_size(TSI.emm, sigma = sigma(albo_binomial_nd), edf = Inf)
+
 
 ```
 
@@ -181,75 +296,4 @@ pwpp(TSI.emm)
 pwpp(TSI.emm, by = "sex", type = "response")
 
 pwpp(TSI.emm, by = "time", type = "response")
-
-
 ```
-
-
-
-```{r}
-# https://cran.r-project.org/web/packages/emmeans/vignettes/interactions.html
-
-emmip(albo_binomial_nd, time ~ sex | time)
-#looks like the linear prediction works better in the morning than the afternoon. 
-
-TSI.emm <- emmeans(albo_binomial_nd, ~ time*sex*habitat)
-contrast(TSI.emm, "poly")
-pairs(TSI.emm)
-contrast(TSI.emm, "eff", by = NULL) 
-
-
-pairs(TSI.emm, simple = "sex") # same as pairs(warp.emm, by = "tension")
-
-#interesting contrast with the pairs. Significant differences between Female - Male in the bush habitat. 
-
-pairs(TSI.emm, simple = "time") 
-
-#significant difference in (i) Female in bush between Afternoon and morning (ii) Males bush Afternoon and morning (iii) Male urban Afternoon and morning
-
-#is there more sugar feeding in the bush or urban areas?
-
-pairs(TSI.emm, simple = "habitat") # same as pairs(warp.emm, by = "tension")
-#significant difference between bush - urban in the female
-
-joint_tests(TSI.emm)
-
-#overall this suggests (i) that there is a significant difference between the time of day and sugar feeding (ii) significant difference between male and female sugar feeding at different times of the day.
-
-joint_tests(TSI.emm, by = "sex")
-
-#significant difference between time in females and habitat for females. 
-#significant differenec in time for males. 
-
-
-```
-
-
-EEmeans results in report
-```{r}
-
-
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

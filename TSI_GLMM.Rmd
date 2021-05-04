@@ -1,3 +1,8 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
 Loading packages
 ```{r}
 library(qtl)
@@ -93,8 +98,6 @@ nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(positi
 #this graph here shows proportion.
 nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
 
-#more males were captured for sugar positive in the morning. 
-
 #Figure 2: 
 #Quite interesting. Our physiological visual examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet very well. 
 
@@ -134,7 +137,7 @@ nd_TSI_data_plots_sum %>% ggplot() + geom_point(aes(y= sugar, x=sex), position="
 #maybe just sex and time
 
 nd_TSI_data_plots_sum_new <- nd_TSI_data_plots %>% 
-                         group_by(sugar,sex, habitat,time) %>% 
+                         group_by(sugar,sex,time) %>% 
                          summarise(average_sugar = mean(sugar), n=n())
 
 TSI_sugar_stats <- describeBy(nd_TSI_data_plots$station, nd_TSI_data_plots$sugar, mat=T)
@@ -145,17 +148,6 @@ male_female_counts <-read.csv("TSI_male_female_counts.csv")
 TSI_sugar_stats <- describeBy(male_female_counts$sex, male_female_counts$sugar, mat=T)
 
 ```
-
-```{r}
-data(sat.act)
-describeBy(sat.act,sat.act$gender) #just one grouping variable	
-describeBy(sat.act,list(sat.act$gender,sat.act$education))  #two grouping variables
-des.mat <- describeBy(sat.act$age,sat.act$education,mat=TRUE) #matrix (data.frame) output 
-des.mat <- describeBy(sat.act$age,list(sat.act$education,sat.act$gender),
-             mat=TRUE,digits=2)  #matrix output
-```
-
-
 
 Pairwise comparisons without the habitat interaction
 ```{r}

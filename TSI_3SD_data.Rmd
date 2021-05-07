@@ -1,0 +1,337 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+Loading packages
+```{r}
+library(qtl)
+library(ggplot2)
+library(pscl)
+library(boot)
+library(psych) 
+library(stats) 
+library(MASS)
+library(car)
+library(lmtest)
+library(lme4)
+library(tidyverse)
+library(tibble)
+library(aods3)
+library(emmeans)
+library(dplyr)
+library(MuMIn)
+library(DHARMa)
+library(blmeco)
+library(cowplot)
+library(ResourceSelection)
+library(ggrepel)
+library(arm)
+library(glmmTMB)
+
+```
+
+Using the mean + 3 SD negative control cut off
+
+```{r}
+#Import the data
+
+albo_control_TSI_data_3SD <- read.csv(file = "TSI_data_albo_cutoff_3x.csv")
+
+#convert the sugar integer to a factor
+
+TSI_data_plots_3SD <- albo_control_TSI_data_3SD %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(TSI_data_plots_3SD)
+
+```
+
+Summary statistics
+```{r}
+
+#add the sample size to each plot
+
+TSI_data_plots_sum <- TSI_data_plots_3SD %>% 
+                         group_by(sugar,sex, habitat,time) %>% 
+                         summarise(samp = n())
+  
+#More females than males captured in the urban environment. #more male albopictus captured in the bush than in the urban habitat.
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x =sex, fill=habitat)) + geom_bar(position = "dodge")
+
+#time of day - more female captured in the afternoon 
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x =sex, fill=time)) + geom_bar(position = "dodge")
+
+#maybe look at fructose concentration by sex
+TSI_data_plots_3SD %>% ggplot() + geom_point(aes(y= fructose_concentration, x=habitat, color = sex))
+
+TSI_data_plots_3SD %>% ggplot() + geom_point(aes(y= sweeptime, x=habitat, color = time))
+
+#look at differences between time of day, sugar positive and sex - this one relates to the GLMM.#significant difference between sugar positive for (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
+#fructose concentration - by male and female for each habitat type. Maybe difference between Male and Female for urban environment?
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=sex, fill=fructose_concentration)) + geom_bar(position="dodge") 
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#final figures examples
+
+#1. Figure: Count of sugar fed status by time of day for both male and female Aedes albopictus. would be good to include the n in this. 
+#why are males more sugar fed in the morning compared to females?
+#think about a facet_grid for comparing count with sex, facetted by time of day. #this one shows that more females than males were captured in both the morning and afternoon.
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#this graph here shows proportion.
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#Figure 2: 
+#Quite interesting. Our physiological visual examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet very well. 
+
+#count
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+#proportion.
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="fill")+ labs(x= "Visual examination", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) + theme_cowplot()
+
+#Figure 3: Habitat, sex and sugar
+#count
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#add mean + standard error.
+
+#proportion
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot() 
+
+
+#try adding the geom_text information with the nd_TSI_plots_sum text 
+#ggplot(nd_TSI_data_plots, mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ geom_text_repel(data= nd_TSI_data_plots_sum, mapping = aes(label=samp, y= 50)) + theme_cowplot()
+
+#this seems to work - repeling the labels. 
+
+#Geom point 0s , 1s to examine the spread of the data 
+
+
+#maybe just sex and time
+
+nd_TSI_data_plots_sum_new <- nd_TSI_data_plots %>% 
+                         group_by(sugar,sex,time) %>% 
+                         summarise(average_sugar = mean(sugar), n=n())
+
+TSI_sugar_stats <- describeBy(nd_TSI_data_plots$station, nd_TSI_data_plots$sugar, mat=T)
+
+
+male_female_counts <-read.csv("TSI_male_female_counts.csv")
+
+TSI_sugar_stats <- describeBy(male_female_counts$sex, male_female_counts$sugar, mat=T)
+
+#Fig x: time of day and sugar
+
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + labs(x= "time", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#Fig x: habitat
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="dodge") +  labs(x= "habitat", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#Fig x: sex
+TSI_data_plots_3SD %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + labs(x= "habitat", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+```
+GLMM for the following model 
+```{r}
+three_sd_no_habitat_interaction_albo_binomial <- glmer(sugar ~ time*sex+habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+summary(three_sd_no_habitat_interaction_albo_binomial)
+
+Anova(three_sd_no_habitat_interaction_albo_binomial)
+
+hoslem.test(albo_control_TSI_data_3SD$sugar, fitted(three_sd_no_habitat_interaction_albo_binomial))
+#signicant - which could be an issue...
+
+#testing the 3 way interaction
+three_interaction_albo_binomial <- glmer(sugar ~ time*sex*habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+
+Anova(three_interaction_albo_binomial)
+hoslem.test(albo_control_TSI_data_3SD$sugar, fitted(three_interaction_albo_binomial))
+```
+
+Tukey post hoc comparisons
+```{r}
+#testing for the interaction between time*sex
+
+albo_habitat_Tukey_sugar_3SD <- emmeans(three_sd_no_habitat_interaction_albo_binomial, list(pairwise ~ sex*time), adjust = "tukey")
+#confint(Tukey_sugar_Binomial, level = 0.95)
+
+albo_habitat_Tukey_sugar_3SD
+
+```
+
+Model with habitat only
+```{r}
+habitat_only <- glm(sugar ~ habitat, family = binomial, data = albo_control_TSI_data_3SD)
+summary(habitat_only)
+
+Anova(habitat_only)
+
+habitat_only_random <- glmer(sugar ~ habitat  + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+summary(habitat_only_random)
+Anova(habitat_only_random)
+
+habitat_only_random_no_interaction <- glmer(sugar ~ time + habitat + sex+ (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+
+Anova(habitat_only_random_no_interaction)
+
+habitat_only_random_habitat_time <- glmer(sugar ~ habitat + time + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+summary()
+Anova(habitat_only_random_habitat_time)
+
+habitat_only_random_habitat_sex <- glmer(sugar ~ habitat + sex + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+summary(habitat_only_random_habitat_sex)
+Anova(habitat_only_random_habitat_sex)
+
+
+#Note the raw data does not account for influences by random factor. 
+#means of the raw data are very similair. #why adding other variables makes habitat significant. Looks like the other. How exactly does that work?
+
+#do you have to present a mean with std error?. 
+
+#having the random factors means this was more realistic. 
+#Barreira et al. Use of the CDC Autocidal Gravid ovitrap to control and prevent outbreaks of aedes aegypti. 
+#when you add other variables, the significance of habitat becomes apparaent. 
+#table output or figures?
+#is the model appropriately specified?
+
+```
+
+Male 3 SD data - Using the mean + 3 SD negative control cut off
+
+```{r}
+#Import the data
+
+albo_male_3SD <- read.csv(file = "TSI_data_male_3SD.csv")
+
+#convert the sugar integer to a factor
+
+albo_male_3SD_plots <- albo_male_3SD %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(albo_male_3SD_plots)
+
+```
+
+Female 3 SD data
+```{r}
+#Import the data
+
+albo_female_3SD <- read.csv(file = "TSI_data_female_3SD.csv")
+
+#convert the sugar integer to a factor
+
+albo_female_3SD_plots <- albo_female_3SD %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(albo_female_3SD_plots)
+
+```
+
+GLMM for the following model 
+```{r}
+female_only_3SD <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = albo_female_3SD)
+summary(female_only_3SD)
+Anova(female_only_3SD)
+
+#interesting. When I plot this by males only, the significance of habitat is not there. 
+
+hoslem.test(albo_female_3SD$sugar, fitted(female_only))
+#highly signicant - 0.014.
+
+Tukey post hoc comparisons
+#testing for the interaction between time*sex
+
+male_only_Tukey <- emmeans(male_only, list(pairwise ~ time), adjust = "tukey")
+#confint(Tukey_sugar_Binomial, level = 0.95)
+
+male_only_Tukey
+
+albo_habitat_Tukey_sugar_3SD
+
+```
+
+GLMM for the following model 
+```{r}
+male_only <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = albo_male_3SD)
+summary(male_only)
+Anova(male_only)
+
+#interesting. When I plot this by males only, the significance of habitat is not there. 
+
+hoslem.test(albo_male_3SD$sugar, fitted(male_only))
+#highly insignicant
+
+Tukey post hoc comparisons
+#testing for the interaction between time*sex
+
+male_only_Tukey <- emmeans(male_only, list(pairwise ~ time), adjust = "tukey")
+#confint(Tukey_sugar_Binomial, level = 0.95)
+
+male_only_Tukey
+
+albo_habitat_Tukey_sugar_3SD
+
+```
+
+
+investigating different models with the glmmTMB
+```{r}
+install.packages("glmmTMB")
+library(glmmTMB)
+
+data(cbpp, package="lme4")
+(bovine <- glmmTMB(cbind(incidence, size-incidence) ~ period + (1|herd),
+  family=binomial, data=cbpp))
+
+Anova(bovine)
+summary(bovine)
+
+```
+
+Implement with my data
+```{r}
+
+albo_3SD_glmmTMB <- glmmTMB(sugar ~ time*sex+habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+summary(albo_3SD_glmmTMB)
+
+#glmmTMB model
+Anova(albo_3SD_glmmTMB)
+
+albo_3SD_glmmTMB_habitat <- glmmTMB(sugar ~ habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data_3SD)
+summary(albo_3SD_glmmTMB_habitat)
+
+
+#glmer model 
+Anova(three_sd_no_habitat_interaction_albo_binomial)
+
+#no meaningful difference between the two models.
+
+```
+
+```{r}
+#install.packages("Hmisc")
+library("Hmisc")
+#devtools::install_version("latticeExtra",repos = "https://www.stats.bris.ac.uk/R/", version="0.6-28")
+library(latticeExtra)
+library("rms")
+
+install.packages("rms")
+
+
+```
+
+```{r}
+
+```
+

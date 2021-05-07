@@ -1,0 +1,250 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+Scripts concerned with TSI sugar feeding 
+
+
+Loading packages
+```{r}
+library(qtl)
+library(ggplot2)
+library(pscl)
+library(boot)
+library(psych) 
+library(stats) 
+library(MASS)
+library(car)
+library(lmtest)
+library(lme4)
+library(tidyverse)
+library(tibble)
+library(aods3)
+library(emmeans)
+library(dplyr)
+library(MuMIn)
+library(DHARMa)
+library(blmeco)
+library(cowplot)
+library(ResourceSelection)
+library(ggrepel)
+library(arm)
+library(glmmTMB)
+
+```
+
+```{r}
+#Import the data
+#Using Aedes Albopictus negative controls (mean + SD*2) as the fructose cut off
+
+albo_TSI_data_2SD <- read.csv(file = "TSI_data_albo_cutoff_2SD.csv")
+
+```
+
+Summary statistics
+```{r}
+
+#convert the sugar integer to a factor
+
+nd_TSI_data_2SD_plots <- albo_TSI_data_2SD %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(nd_TSI_data_2SD_plots)
+
+#add the sample size to each plot
+
+nd_TSI_data_plots_sum <- nd_TSI_data_2SD_plots %>% 
+                         group_by(sugar,sex, habitat,time) %>% 
+                         summarise(samp = n())
+  
+nd_TSI_data_plots_sum
+
+#More females than males captured in the urban environment. #more male albopictus captured in the bush than in the urban habitat.
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x =sex, fill=habitat)) + geom_bar(position = "dodge")
+
+#time of day - more female captured in the afternoon 
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x =sex, fill=time)) + geom_bar(position = "dodge")
+
+#maybe look at fructose concentration by sex
+nd_TSI_data_2SD_plots %>% ggplot() + geom_point(aes(y= fructose_concentration, x=habitat, color = sex))
+
+nd_TSI_data_2SD_plots %>% ggplot() + geom_point(aes(y= sweeptime, x=habitat, color = time))
+
+#look at differences between time of day, sugar positive and sex - this one relates to the GLMM.#significant difference between sugar positive for (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
+
+#there was more sugar feeding in the afternoon than the morning. 
+
+#Sweeptime with habitat, filled with sex. Doesn't appear to be significantly different.
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=habitat, y=sweeptime)) + 
+  geom_point()
+
+#concentration of fructose by habitat type - no significant difference.
+nd_TSI_data_2SD_plots %>% ggplot() + 
+  geom_point(aes(x=habitat, y=fructose_concentration, color=sex))
+
+
+#fructose concentration - by male and female for each habitat type. Maybe difference between Male and Female for urban environment?
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=fructose_concentration)) + geom_bar(position="dodge") 
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#final figures examples
+
+#1. Figure: Count of sugar fed status by time of day for both male and female Aedes albopictus. would be good to include the n in this. 
+#why are males more sugar fed in the morning compared to females?
+#think about a facet_grid for comparing count with sex, facetted by time of day. #this one shows that more females than males were captured in both the morning and afternoon.
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#this graph here shows proportion.
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#time
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#habitat
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#sex
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#Figure 2: 
+#Quite interesting. Our physiological visual examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet very well. 
+
+#count
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+
+#proportion.
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="fill")+ labs(x= "Visual examination", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) + theme_cowplot()
+
+#Figure 3: Habitat, sex and sugar
+#count
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#add mean + standard error.
+
+#proportion
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot() 
+
+
+#try adding the geom_text information with the nd_TSI_plots_sum text 
+#ggplot(nd_TSI_data_plots, mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ geom_text_repel(data= nd_TSI_data_plots_sum, mapping = aes(label=samp, y= 50)) + theme_cowplot()
+
+#this seems to work - repeling the labels. 
+
+#Geom point 0s , 1s to examine the spread of the data 
+
+
+nd_TSI_data_plots_sum %>% ggplot() + geom_point(aes(y= sugar, x=sex), position="nudge", size=3, alpha=0.3)
+
+#maybe just sex and time
+
+nd_TSI_data_plots_sum_new <- nd_TSI_data_plots %>% 
+                         group_by(sugar,sex,time) %>% 
+                         summarise(average_sugar = mean(sugar), n=n())
+
+TSI_sugar_stats <- describeBy(nd_TSI_data_plots$station, nd_TSI_data_plots$sugar, mat=T)
+
+
+male_female_counts <-read.csv("TSI_male_female_counts.csv")
+
+TSI_sugar_stats <- describeBy(male_female_counts$sex, male_female_counts$sugar, mat=T)
+
+#Fig x: time of day and sugar
+
+nd_TSI_data_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + labs(x= "time", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+
+
+#Fig x: habitat
+nd_TSI_data_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "habitat", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#Fig x: sex
+nd_TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + labs(x= "habitat", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+
+```
+
+GLMM for the following model 
+```{r}
+albo_TSI_data_2SD_glmer <- glmer(sugar ~ time*sex+habitat + (1|day) + (1|station), family = binomial, data = albo_TSI_data_2SD)
+Anova(albo_TSI_data_2SD_glmer)
+summary(albo_TSI_data_2SD_glmer)
+
+hoslem.test(albo_TSI_data_2SD$sugar, fitted(albo_TSI_data_2SD_glmer))
+
+#when using the 2 SD data, the H-L fit is not significant.
+```
+
+Plotting the male 2 SD data
+```{r}
+albo_male_2SD <- read.csv(file = "TSI_data_albo_male_2SD.csv")
+
+albo_male_2SD_plots <- albo_male_2SD %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(albo_female_2SD_plots)
+
+male_only_2SD <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = albo_male_2SD)
+summary(male_only_2SD)
+Anova(male_only_2SD)
+
+#interesting. When I plot this by males only, the significance of habitat is not there. 
+
+hoslem.test(albo_male_2SD$sugar, fitted(male_only_2SD))
+#highly insignicant
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+albo_male_2SD_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+```
+
+Plotting the female 2 SD data
+```{r}
+#Import the data
+
+albo_female_2SD <- read.csv(file = "TSI_data_albo_female_2SD.csv")
+
+#convert this to a factor
+
+#convert the sugar integer to a factor
+
+albo_female_2SD_plots <- albo_female_2SD %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(albo_female_2SD_plots)
+
+#running the model
+
+female_only_2SD <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = albo_female_2SD)
+summary(female_only_2SD)
+Anova(female_only_2SD)
+
+#time and habitat are significant. 
+
+hoslem.test(albo_female_2SD$sugar, fitted(female_only_2SD))
+#highly insignicant
+
+#plot sugar feeding by sex and time
+
+#time for females albopictus - more female albopictus is sugar fed in the morning. 
+albo_female_2SD_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#habitat for females albopictus - more female albopictus is sugar fed in the urban environment. 
+albo_female_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+
+```

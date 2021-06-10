@@ -36,6 +36,7 @@ library(vegan)
 library(jtools)
 library(sjPlot)
 library(stargazer)
+library(ggpubr)
 ```
 
 ```{r}
@@ -272,7 +273,7 @@ Plot of fructose concentration by sex
 TSI_data_positive$time2 <- factor(TSI_data_positive$time, levels=c("Morning", "Afternoon"))
 
 #Fig b
-TSI_data_positive %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration), fill = time2)) + scale_fill_discrete(limits=positions_time) + geom_boxplot() + labs(x= "Sex", y = "log fructose concentration (ug/uL)", fill ="Time")  + theme_cowplot()
+TSI_data_positive %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration), fill = time2)) + scale_fill_discrete(limits=positions_time) + geom_boxplot() + labs(x= "Sex", y = "log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
 ```
 
 Model for males and females (to avoid the simpson's paradox)
@@ -336,3 +337,35 @@ Figure 2: visual examination to detect sugar in mossies
 nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="fill")+ labs(x= "Visual examination", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
 
 ```
+
+Figure of the cut offs for mean + SDs
+
+```{r}
+
+albo_data_cutoff <- read.csv("albo_data_cutoffs.csv")
+
+```
+
+```{r}
+#maybe just do by females and then by males and then facet_wrap the two together.
+
+#with the female cut offs only.
+
+female_albo_cutoff <- albo_data_cutoff %>% filter(sex == "Female") %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_hline(yintercept=log(0.001775502), lty="solid", col = "red")+ geom_hline(yintercept = log(0.004800524), lty="dotted", col = "red")+ geom_hline(yintercept = log(0.006951006), lty="longdash", col = "red") + geom_hline(yintercept = log(0.009538758), lty="twodash", col = "red") + labs(x= "", y = "Log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
+
+#with the male cutoffs only:
+
+male_albo_cutoff <- albo_data_cutoff %>% filter(sex == "Male") %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_hline(yintercept=log(0.001430095), lty="solid", col = "red")+ geom_hline(yintercept = log(0.003445098), lty="dotted", col = "red")+ geom_hline(yintercept = log(0.0054601), lty="longdash", col = "red") + geom_hline(yintercept = log(0.007475102), lty="twodash", col = "red") + labs(x= "", y = "Log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
+
+ggarrange(female_albo_cutoff,male_albo_cutoff)
+
+
+# not logged female
+albo_data_cutoff %>% ggplot(mapping = aes(x=sex, y=fructose_concentration)) + geom_point(position = "jitter") + geom_boxplot() + geom_hline(yintercept=0.001430095, lty="solid", col = "red")+ geom_hline(yintercept = 0.003445098
+, lty="dotted", col = "red")+ geom_hline(yintercept = 0.0054601, lty="longdash", col = "red") + geom_hline(yintercept = 0.007475102, lty="twodash", col = "red") + labs(x= "Sex", y = "fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
+
+#just try with the female data at the moment.
+
+
+```
+

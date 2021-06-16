@@ -61,6 +61,14 @@ Summary statistics
 
 ```{r}
 
+#proportion sugar fed at each station
+
+sugar_per_station <- nd_TSI_data_2SD_plots %>% 
+                      group_by(station, sugar) %>%
+                      summarise(samp = n()) %>%
+                      mutate(percent=prop.table(samp)*100)
+
+#does not appear to be significantly different
 
 #add the sample size to each plot
 
@@ -136,7 +144,7 @@ hoslem.test(albo_TSI_data_2SD$sugar, fitted(albo_TSI_data_2SD_glmer))
 
 #when using the 2 SD data, the H-L fit is not significant.
 
-tab_model(albo_TSI_data_2SD_glmer) 
+tab_model(albo_TSI_data_2SD_glmer, show.se = T) 
 
 #seeing whether habitat and flowers binary correlate
 
@@ -163,7 +171,10 @@ Anova(male_only_2SD)
 
 summ(male_only_2SD)
 
-tab_model(male_only_2SD, show.stat = T, show.est = T, show.se = T, show.intercept = T, show.fstat = T)
+tab_model(male_only_2SD, show.stat = T, show.se = T, show.intercept = T, show.fstat = T, show.est = T)
+
+tab_model(male_only_2SD, show.est = T, show.se = T)
+
 #only time is significant for the males.
 #interesting. When I plot this by males only, the significance of habitat is not there. 
 
@@ -199,11 +210,13 @@ female_only_2SD <- glmer(sugar ~ time+habitat+flowers_binary+(1|day) + (1|statio
 summary(female_only_2SD)
 summ(female_only_2SD)
 Anova(female_only_2SD)
-
 #depending on which terms are included in the model. Flowers_binary is insignificant for this model.
 
 hoslem.test(albo_female_2SD$sugar, fitted(female_only_2SD))
 #highly insignicant
+
+tab_model(female_only_2SD, show.se = T, show.intercept = T, show.fstat = T)
+
 
 #plot sugar feeding by sex and time
 
@@ -248,6 +261,9 @@ tukey_fructose_concentration <- emmeans(model_fructose_concentration, list(pairw
 tukey_fructose_concentration
 
 #higher fructose concentration for the males than for the females.
+
+tab_model(model_fructose_concentration, show.stat = T, show.est = T, show.se = T, show.intercept = T, show.fstat = T)
+
 
 #only including positive mosquitoes, so you would need to filter this by positive only (and include bins for flowers)
 aggregate(formula = fructose_concentration ~ habitat + sex,
@@ -344,6 +360,43 @@ Figure of the cut offs for mean + SDs
 
 albo_data_cutoff <- read.csv("albo_data_cutoffs.csv")
 
+#female only 
+female_albo_data_cutoff <- albo_data_cutoff %>% filter(sex == "Female")
+
+#male only 
+male_albo_data_cutoff <- albo_data_cutoff %>% filter(sex == "Male")
+
+#also import the sex-specific cut-off fructose concentration values, to plot these in R. 
+#save it as a file with 1. mean absorbance, 2. fructose concentration, 3. sex
+
+albo_male_female_negatives <- read.csv("Albo_negative_controls_female_male_all.csv")
+
+#female only
+female_negatives <- albo_male_female_negatives %>% filter(sex == "Female")
+
+#male only
+
+male_negatives <- albo_male_female_negatives %>% filter(sex == "Male")
+
+```
+
+Try to plot the two datasets on one graph
+
+```{r}
+
+ggplot() + geom_point(data= female_albo_data_cutoff, aes(x=sex, y=log(fructose_concentration)), position = "jitter", colour = "grey") + geom_point(data = albo_male_female_negatives, aes(x=sex, y=log(fructose_concentration)), position = "jitter", colour = "red")
+
+#try the female with the cut offs
+albo_female_with_negatives <- albo_data_cutoff %>% filter(sex == "Female") %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_point(data= female_negatives, position = "jitter", color = "orange")+ geom_hline(yintercept=log(0.001775502), lty="solid", col = "red")+ geom_hline(yintercept = log(0.004800524), lty="dotted", col = "red")+ geom_hline(yintercept = log(0.006951006), lty="longdash", col = "red") + geom_hline(yintercept = log(0.009538758), lty="twodash", col = "red") + labs(x= "", y = "Log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
+
+#scale_y_continuous(limits = c(-6.5, 0))
+  
+  
+#try the male with the cutoffs
+
+albo_male_with_negatives <- albo_data_cutoff %>% filter(sex == "Male") %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_point(data = male_negatives, position = "jitter", color = "orange") + geom_hline(yintercept=log(0.001430095), lty="solid", col = "red")+ geom_hline(yintercept = log(0.003445098), lty="dotted", col = "red")+ geom_hline(yintercept = log(0.0054601), lty="longdash", col = "red") + geom_hline(yintercept = log(0.007475102), lty="twodash", col = "red") + labs(x= "", y = "Log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot() 
+
+ggarrange(albo_female_with_negatives,albo_male_with_negatives)
 ```
 
 ```{r}
@@ -359,13 +412,41 @@ male_albo_cutoff <- albo_data_cutoff %>% filter(sex == "Male") %>% ggplot(mappin
 
 ggarrange(female_albo_cutoff,male_albo_cutoff)
 
+```
 
-# not logged female
-albo_data_cutoff %>% ggplot(mapping = aes(x=sex, y=fructose_concentration)) + geom_point(position = "jitter") + geom_boxplot() + geom_hline(yintercept=0.001430095, lty="solid", col = "red")+ geom_hline(yintercept = 0.003445098
-, lty="dotted", col = "red")+ geom_hline(yintercept = 0.0054601, lty="longdash", col = "red") + geom_hline(yintercept = 0.007475102, lty="twodash", col = "red") + labs(x= "Sex", y = "fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
+Looking at n and % for each category
+```{r}
+#use the summarise function - this worked for mean.
 
-#just try with the female data at the moment.
+albo_mean_cutoff <- albo_data_cutoff %>% 
+  group_by(sex, mean) %>% 
+  summarise(samp = n()) %>%
+  mutate(percent =prop.table(samp)*100) 
+
+albo_mean_1SD_cutoff <- albo_data_cutoff %>% 
+  group_by(sex, mean_1SD) %>% 
+  summarise(samp = n()) %>%
+  mutate(percent=prop.table(samp)*100)
 
 
+albo_mean_2SD_cutoff <- albo_data_cutoff %>% 
+  group_by(sex, mean_2SD) %>% 
+  summarise(samp = n()) %>%
+  mutate(percent=prop.table(samp)*100)
+
+albo_mean_3SD_cutoff <- albo_data_cutoff %>% 
+  group_by(sex, mean_3SD) %>% 
+  summarise(samp = n()) %>%
+  mutate(percent=prop.table(samp)*100)
+
+#didn't quite work for the Female N - Female P.
+    
+#add the sample size to each plot
+
+nd_TSI_data_plots_sum <- nd_TSI_data_2SD_plots %>% 
+                         group_by(habitat) %>% 
+                         summarise(samp = n())
+  
+nd_TSI_data_plots_sum
 ```
 

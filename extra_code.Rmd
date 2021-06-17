@@ -1,0 +1,927 @@
+Old data
+
+Importing the data
+```{r}
+TSI_data <- read.csv(file = "TSI_data.csv")
+```
+
+Summary statistics
+```{r}
+
+#convert the sugar integer to a factor
+
+TSI_data_plots <- TSI_data %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(TSI_data_plots)
+
+#More females than males captured in the urban environment. #more male albopictus captured in the bush than in the urban habitat.
+TSI_data_plots %>% ggplot(mapping = aes(x =sex, fill=habitat)) + geom_bar(position = "dodge")
+
+#time of day - more female captured in the afternoon 
+TSI_data_plots %>% ggplot(mapping = aes(x =sex, fill=time)) + geom_bar(position = "dodge")
+
+#maybe look at fructose concentration by sex
+TSI_data_plots %>% ggplot() + geom_point(aes(y= fructose_concentration, x=habitat, color = sex))
+
+TSI_data_plots %>% ggplot() + geom_point(aes(y= sweeptime, x=habitat, color = time))
+
+#look at differences between time of day, sugar positive and sex - this one relates to the GLMM.#significant difference between sugar positive for (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
+
+#there was more sugar feeding in the afternoon than the morning. 
+
+#Sweeptime with habitat, filled with sex. Doesn't appear to be significantly different.
+
+TSI_data_plots %>% ggplot(mapping = aes(x=habitat, y=sweeptime)) + 
+  geom_point()
+
+#concentration of fructose by habitat type - no significant difference.
+TSI_data_plots %>% ggplot() + 
+  geom_point(aes(x=habitat, y=fructose_concentration, color=sex))
+
+
+#fructose concentration - by male and female for each habitat type. Maybe difference between Male and Female for urban environment?
+
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=fructose_concentration)) + geom_bar(position="dodge") 
+
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#final figures examples
+
+#1. Figure: Count of sugar fed status by time of day for both male and female Aedes albopictus. would be good to include the n in this. 
+#why are males less sugar fed in the afternoon compared to females?
+#think about a facet_grid for comparing count with sex, facetted by time of day. #this one shows that more females than males were captured in both the morning and afternoon.
+
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#this graph here shows proportion.
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#Figure 2: 
+#Quite interesting. Our physiological examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet. 
+
+#this graph shows count
+
+TSI_data_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+#this graph here shows proportion.
+
+TSI_data_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="fill")+ labs(x= "Visual examination", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+#Figure 3: Habitat, sex and sugar
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#This graph shows proportion
+
+TSI_data_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#there is no statistical difference between male and female sugar positivity in either the urban or bush habitat types.
+
+
+```
+
+Running a GLMM with binomial family 
+
+```{r}
+
+#consider changing the terms to all interactions. Await Rhondda's feedback re: model. 
+albo_binomial <- glmer(sugar ~ time*sex*habitat + (1|day) + (1|station), family = binomial, data = TSI_data)
+summary(albo_binomial)
+Anova(albo_binomial)
+
+#tukey post hoc test
+
+Tukey_sugar_Binomial <- emmeans(albo_binomial, list(pairwise ~ time+sex), adjust = "tukey")
+#confint(Tukey_sugar_Binomial, level = 0.95)
+
+Tukey_sugar_Binomial
+
+#significant difference between sugar presence in (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
+
+#Hosmer and Lemeshow goodness of fit (GOF) test - is there a significant difference in the distribution of positive values from what the model predicts. 
+
+hoslem.test(TSI_data$sugar, fitted(albo_binomial))
+
+#data:  TSI_data$sugar, fitted(albo_binomial)
+#X-squared = 15.437, df = 8, p-value > 0.05119
+```
+
+
+
+Fitting only the male mosquitoes (using binomial model)
+```{r}
+
+TSI_data_male <- read.csv(file = "TSI_data_male.csv")
+
+male_albo_binomial <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_male)
+summary(male_albo_binomial)
+Anova(male_albo_binomial)
+
+#the binomial models has a lower AIC.
+
+r.squaredGLMM(male_albo_binomial)
+
+
+#testing for overdispersion with the negative binomial model
+
+overdisp_Binomial_male <- gof(male_albo_binomial)
+sum(residuals(overdisp_Binomial_male,"pearson")^2)
+
+#tukey post hoc test
+
+Tukey_sugar_NB_male <- emmeans(male_albo_binomial, list(pairwise ~ time), adjust = "tukey")
+confint(Tukey_sugar_NB_male, level = 0.95)
+
+Tukey_sugar_NB_male
+
+# significant difference between sugar fed status by time of day
+
+```
+Fitting only the female mosquitoes (using binomial model)
+
+```{r}
+TSI_data_female <- read.csv(file = "TSI_data_female.csv")
+
+female_albo_binomial <- glmer(sugar ~ time + habitat + (1|day) + (1|station), family = binomial, data = TSI_data_female)
+summary(female_albo_binomial)
+Anova(female_albo_binomial)
+
+#the binomial models has a lower AIC.
+
+r.squaredGLMM(female_albo_binomial)
+
+#testing for overdispersion with the negative binomial model
+
+overdisp_NB_female <- gof(female_albo_binomial)
+sum(residuals(overdisp_NB_female,"pearson")^2)
+
+#tukey post hoc test
+
+Tukey_sugar_NB_female <- emmeans(female_albo_binomial, list(pairwise ~ time), adjust = "tukey")
+confint(Tukey_sugar_NB_female, level = 0.95)
+
+Tukey_sugar_NB_female
+
+#this shows that the time of day that they were sugar fed was significantly different for females. 
+```
+
+Running a GLMM with negative binomial family 
+
+```{r}
+
+albo_n_b <- glmer.nb(sugar ~ time*sex* habitat + (1|day) + (1|station), data = TSI_data)
+#warning messages (bounday (singular), iteration limit reached boundary).
+summary(albo_n_b)
+#the ratio of residual deviance to df is ~1.5.
+#deviance df.resid 
+#2692     1799 
+
+dispersion_glmer(albo_n_b)
+
+#dispersion parameter is 0.82. This is considerably lower than the binomial family model. According to dispersion_glmer(blmeco) by D. Bates, if its value is between 0.75 and 1.4, there may not be an overdispersion problem. Examination of the residuals is required though. 
+
+##using DHARMa to investigate underdispersion and overdispersion
+
+albo_n_b_overdispersion <- simulateResiduals(albo_n_b, plot = T)
+
+residuals(albo_n_b_overdispersion)
+
+residuals(albo_n_b_overdispersion, quantileFunction = qnorm, outlierValues = c(-7,7))
+
+plot(albo_n_b_overdispersion)
+
+#QQ plot distribution test, dispersion test and outlier tests to be significant for the negative binomial model (not great)
+
+testOverdispersion(albo_n_b_overdispersion)
+
+testDispersion(albo_n_b_overdispersion, alternative = "less", plot = FALSE) # only underdispersion))
+
+testDispersion(albo_n_b_overdispersion, alternative = "greater", plot = FALSE) # only oversispersion
+
+testDispersion(albo_n_b_overdispersion, type = "PearsonChisq", alternative = "greater")
+
+testOutliers(albo_n_b_overdispersion, alternative = c("two.sided", "greater",
+  "less"), margin = c("both", "upper", "lower"), type = c("default",
+  "bootstrap", "binomial"), nBoot = 100, plot = T)
+
+Anova(albo_n_b)
+
+#It appears that there is singularity in the data. If the fit is singular, there might be a higher chance of a false positive.
+
+albo_n_b_R2 <- r.squaredGLMM(albo_n_b)
+
+#tukey post hoc test
+
+Tukey_sugar_albo_n_b <- emmeans(albo_n_b, list(pairwise ~ time*sex), adjust = "tukey")
+confint(Tukey_sugar_albo_n_b, level = 0.95)
+
+Tukey_sugar_albo_n_b
+
+#significant difference between sugar positive for (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
+
+#these results are the same as the binomial family, but the (i) has a slightly higher, albeit still significant, p value.  
+
+
+#the ratio of residual deviance to df is ~1.2
+#deviance df.resid 
+#2281     1800 
+
+albo_binomial_R2 <- r.squaredGLMM(albo_binomial)
+
+#The model as a whole gives very low prediction of individual responses.
+
+gof(albo_binomial)
+sum(residuals(albo_binomial,"pearson")^2)
+
+#residuals are very high - not a great thing.
+
+#running the GLMM with all the interaction effects:
+
+albo_habitat_sex_glmm <- glmer(sugar ~ habitat*sex + (1|day) + (1|station), family = binomial, data = TSI_data)
+summary(albo_habitat_sex_glmm)
+Anova(albo_habitat_sex_glmm)
+
+Tukey_habitat_sex_sugar_Binomial <- emmeans(albo_habitat_sex_glmm, list(pairwise ~ habitat*sex), adjust = "tukey")
+confint(Tukey_habitat_sex_sugar_Binomial, level = 0.95)
+
+#looks like sig difference bt
+
+
+```
+
+
+Comparison of the two models
+```{r}
+#compare the residuals between models
+
+#negative binomial - residuals 1062
+sum(residuals(albo_n_b,"pearson")^2)
+
+#binomial - residuals 1788
+sum(residuals(albo_binomial,"pearson")^2)
+
+#compare AIC weights between models:
+
+AIC(albo_binomial, albo_n_b)
+
+#the binomial model has the lower AIC weight.
+
+#Compare the R2 between different models
+
+#negative binomial
+albo_n_b_R2
+
+#binomial
+albo_binomial_R2
+
+#CONCLUSION 
+
+#the binomial model has the lowest AIC weights, but the highest residuals. I think it might be a better fit for the data, considering the results from DHARMa in finding the QQ plot distribution test, dispersion test and outlier tests to be not significant. These tests were significant for the negative binomial model (not great). 
+```
+
+```{r}
+#Measuring overdispersion
+
+#the dispersal parameter value is 1.11. According to dispersion_glmer(blmeco) - the square root of the scale parameter, according to recommendations by D. Bates, if its value is between 0.75 and 1.4, there may not be an overdispersion problem.
+dispersion_glmer(albo_binomial)
+```
+
+
+#if interaction terms model is too complicated, it could be possible to run a model without interactions.
+no_interaction_albo_binomial_nd <- glmer(sugar ~ time+sex+habitat + (1|day) + (1|station), family = binomial, data = albo_control_TSI_data)
+summary(no_interaction_albo_binomial_nd)
+Anova(no_interaction_albo_binomial_nd)
+
+no_interaction_albo_binomial_nd_Tukey_sugar_Binomial <- emmeans(no_interaction_albo_binomial_nd, list(pairwise ~ time+sex+habitat), adjust = "tukey")
+#confint(Tukey_sugar_Binomial, level = 0.95)
+
+hoslem.test(albo_control_TSI_data$sugar, fitted(no_interaction_albo_binomial_nd_Tukey_sugar_Binomial))
+
+#data:  TSI_data$sugar, fitted(albo_binomial)
+#X-squared = 483.14, df = 8, p-value < 2.2e-16
+
+#this shows that the goodness of fit is significant. Maybe the model is too complicated?
+
+#albo_Tukey_sugar_Binomial
+
+#albo_Tukey_sugar_habitat_Binomial <- emmeans(albo_binomial_nd, list(pairwise ~ sex+time), adjust = "tukey")
+
+#significant difference between sugar presence in (i) Female, afternoon bush, Female, morning, bush (ii) morning female - afternoon male (iii) afternoon male - morning male, (iv) afternoon female - morning female. 
+
+#Hosmer and Lemeshow goodness of fit (GOF) test - is there a significant difference in the distribution of positive values from what the model predicts. 
+
+#https://stats.stackexchange.com/questions/169438/evaluating-logistic-regression-and-interpretation-of-hosmer-lemeshow-goodness-of
+
+
+Pairwise comparisons without the habitat interaction
+```{r}
+no_habitat_interaction_TSI.emm <- emmeans(, ~ time*sex+habitat)
+contrast(no_habitat_TSI.emm, "poly")
+contrast(no_habitat_TSI.emm, adjust = "Tukey")
+
+pairs(albo_habitat_Tukey_sugar_3SD)
+contrast(no_habitat_TSI.emm, "eff", by = NULL, combine=T) 
+
+no_iteraction_albo_habitat_Tukey_sugar_Binomial <- emmeans(no_iteraction_albo_binomial_nd, list(pairwise ~ habitat+time*sex), adjust = "tukey")
+#confint(Tukey_sugar_Binomial, level = 0.95)
+
+no_iteraction_albo_habitat_Tukey_sugar_Binomial
+
+#Another way of viewing the table
+
+pairs(albo_habitat_Tukey_sugar_3SD, simple = "sex", reverse=T)
+
+#Significant differences in the proportion of sugar fed Females and Male mosquitoes captured in the bush habitat in the morning only.
+
+pairs(albo_habitat_Tukey_sugar_3SD, simple = "time", reverse=T) 
+
+#significant difference in the proportion of sugar fed (i) between female mosquitoes captured in the bush between morning and afternoon sampling events (ii) Males captured in the bush between morning and afternoon sampling events (iii) Males captured in urban environments between the morning and afternoon sampling events.
+
+pairs(no_habitat_TSI.emm, simple = "habitat", reverse=T) 
+#why are the z.ratios all the same?
+
+
+
+```
+
+Matrices and effect size
+```{r}
+pwpm(TSI.emm)
+
+#Cohen's d effect size. To measure the strength of the relationship. 
+
+eff_size(TSI.emm, sigma = sigma(albo_binomial_nd), edf = Inf)
+
+
+```
+
+Pairwise P-value plots
+```{r}
+pwpp(TSI.emm)
+
+pwpp(TSI.emm, by = "sex", type = "response")
+
+pwpp(TSI.emm, by = "time", type = "response")
+```
+
+
+Graphs
+```{r}
+#this seems to work - repeling the labels. 
+
+#Geom point 0s , 1s to examine the spread of the data 
+
+
+  nd_TSI_data_plots_sum %>% ggplot() + geom_point(aes(y= sugar, x=sex), position="nudge", size=3, alpha=0.3)
+
+#maybe just sex and time
+
+nd_TSI_data_plots_sum_new <- nd_TSI_data_plots %>% 
+                         group_by(sugar,sex,time) %>% 
+                         summarise(average_sugar = mean(sugar), n=n())
+
+TSI_sugar_stats <- describeBy(nd_TSI_data_plots$station, nd_TSI_data_plots$sugar, mat=T)
+
+
+male_female_counts <-read.csv("TSI_male_female_counts.csv")
+
+TSI_sugar_stats <- describeBy(male_female_counts$sex, male_female_counts$sugar, mat=T)
+
+
+```
+
+
+
+```{r}
+
+albo_female_flowers <- read.csv(file = "TSI_data_albo_female_2SD_flowers_positive.csv")
+
+flowers_bins <- c("(0-10)", "(11-50)", "(50-100)", "(100-250)")
+
+#select data
+flower_group <- albo_female_flowers %>% select(flower,fructose_concentration)
+
+flower_group <- as_tibble(flower_group)
+
+str(flower_group)
+
+
+
+#maybe look at fructose concentration by # flowers only females
+
+albo_female_2SD_plots %>% ggplot(mapping = aes(x=PDFS, fill=sugar)) + geom_line(position="fill") + facet_wrap(~sex+habitat) + labs(x= "habitat", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+
+
+```
+
+
+Removal of only station 8
+
+```{r}
+station8_removed <- read.csv(file = "station8_female_remove_stations_H_L_TSI_data_albo_cutoff_2SD.csv")
+
+station8_removed <- station8_removed %>% mutate(sugar= as.factor(sugar))
+
+stations8_removed_glmer <- glmer(sugar ~ time+ habitat +catch_median +(1|day) + (1|station), family = binomial, data = station8_removed)
+Anova(stations8_removed_glmer)
+
+```
+
+Removal of stations 8, 7 and 5
+
+```{r}
+stations_removed <- read.csv(file = "remove_stations_H_L_TSI_data_albo_cutoff_2SD.csv")
+
+stations_removed <- stations_removed %>% mutate(sugar= as.factor(sugar))
+
+stations_removed_glmer <- glmer(sugar ~ sex*time + catch_median +(1|day) + (1|station), family = binomial, data = stations_removed)
+Anova(stations_removed_glmer)
+
+
+```
+
+Removal of stations 8, 7 and 5 males
+
+```{r}
+male_stations_removed <- read.csv(file = "male_remove_stations_H_L_TSI_data_albo_cutoff_2SD.csv")
+
+male_stations_removed <- male_stations_removed %>% mutate(sugar= as.factor(sugar))
+
+male_stations_removed_glmer <- glmer(sugar ~ time+habitat + catch_median+ (1|day) + (1|station), family = binomial, data = male_stations_removed)
+Anova(male_stations_removed_glmer)
+
+```
+
+Removal of stations 8, 7 and 5 females
+
+```{r}
+female_stations_removed <- read.csv(file = "female_remove_stations_H_L_TSI_data_albo_cutoff_2SD.csv")
+
+female_stations_removed <- female_stations_removed %>% mutate(sugar= as.factor(sugar))
+
+female_stations_removed_glmer <- glmer(sugar ~ time+habitat + catch_median + (1|day) + (1|station), family = binomial, data = female_stations_removed)
+Anova(female_stations_removed_glmer)
+```
+
+Import data no day 8
+```{r}
+
+no_day8_albo_TSI_data_2SD <- read.csv(file = "no_day8_TSI_data_albo_cutoff_2SD.csv")
+
+no_day8_albo_TSI_data_2SD_glmer <- glmer(sugar ~ time*sex+habitat + (1|day) + (1|station), family = binomial, data = no_day8_albo_TSI_data_2SD)
+Anova(no_day8_albo_TSI_data_2SD_glmer)
+
+#simpsons paradox is still a thing.
+
+sex_no_day8 <- nd_TSI_data_2SD_plots %>% 
+                         group_by(day, sex, time) %>% 
+                         summarise(samp = n())
+
+
+```
+
+
+Male no day 8
+```{r}
+noday8male <- read.csv(file = "no_day8Male_TSI_data_albo_cutoff_2SD.csv")
+
+noday8male_glmer <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = noday8male)
+Anova(noday8male_glmer)
+
+#interesting. When I plot this by males only, the significance of habitat is not there. 
+
+hoslem.test(noday8male$sugar, fitted(noday8male_glmer))
+#highly insignicant
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+albo_male_2SD_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#habitat for male albopictus
+noday8male_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "Habitat", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+str(noday8male)
+
+noday8male_plots <- noday8male %>% mutate(sugar= as.factor(sugar))
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+noday8male_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+```
+
+Female no day 8
+```{r}
+noday8female <- read.csv(file = "no_day8Female_TSI_data_albo_cutoff_2SD.csv")
+
+#convert this to a factor
+
+#convert the sugar integer to a factor
+
+noday8female_plots <- noday8female %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(noday8female_plots)
+
+#running the model
+
+noday8female_glmer <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = noday8female)
+Anova(noday8female_glmer)
+
+#time and habitat are significant. 
+
+hoslem.test(noday8female$sugar, fitted(noday8female_glmer))
+#highly insignicant
+
+#plot sugar feeding by sex and time
+
+#time for females albopictus - more female albopictus is sugar fed in the morning. 
+noday8female_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#order them by morning and afternoon
+
+positions_time <- c("Morning", "Afternoon")
+
+#habitat for females albopictus - more female albopictus is sugar fed in the urban environment. 
+noday8female_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "Habitat", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#time for females:
+noday8female_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+
+```
+
+Female no day 4 or 8
+
+```{r}
+noday4or8female <- read_csv(file = "no_day4or8Female_TSI_data_albo_cutoff_2SD.csv")
+
+noday4or8female_plots <- noday4or8female %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(noday4or8female_plots)
+
+noday4or8female_glmer <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = noday4or8female)
+Anova(noday4or8female_glmer)
+
+#interesting. When I plot this by males only, the significance of habitat is not there. 
+
+hoslem.test(noday4or8male$sugar, fitted(noday4or8male_glmer))
+#highly insignicant
+
+#time for female albopictus - more male albopictus is sugar fed in the morning. 
+noday4or8female_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#habitat for female albopictus
+noday4or8female_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "Habitat", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+str(noday8male)
+
+noday8male_plots <- noday8male %>% mutate(sugar= as.factor(sugar))
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+noday8male_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+
+```
+
+Male no day 4 or 8
+
+```{r}
+noday4or8male <- read.csv(file = "no_day4or8Male_TSI_data_albo_cutoff_2SD.csv")
+
+#convert the sugar integer to a factor
+
+noday4or8male_plots <- noday4or8male %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(noday4or8male_plots)
+
+noday4or8male_glmer <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = noday4or8male)
+Anova(noday4or8male_glmer)
+
+#interesting. When I plot this by males only, the significance of habitat is not there. 
+
+hoslem.test(noday4or8male$sugar, fitted(noday4or8male_glmer))
+#highly insignicant
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+noday4or8male_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#habitat for male albopictus
+noday4or8male_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "Habitat", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+str(noday8male)
+
+noday8male_plots <- noday8male %>% mutate(sugar= as.factor(sugar))
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+noday8male_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+
+```
+
+Male no days 8, 7 ,12 and 2 residential
+
+```{r}
+
+nomale_resselect_days <- read.csv(file = "TSI_data_albo_male_2SD_no_resdays8_7_12_2.csv")
+
+nomale_resselect_days_plots <- nomale_resselect_days %>% mutate(sugar= as.factor(sugar))
+
+#confirm that this is now a factor. 
+str(nomale_resselect_days_plots)
+
+nomale_resselect_days_glmer <- glmer(sugar ~ time+habitat + (1|day) + (1|station), family = binomial, data = nomale_resselect_days)
+Anova(nomale_resselect_days_glmer)
+
+#interesting. When I plot this by males only, the significance of habitat is not there. 
+
+hoslem.test(nomale_resselect_days$sugar, fitted(nomale_resselect_days_glmer))
+#highly insignicant
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+noday4or8male_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#habitat for male albopictus
+nomale_resselect_days_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "Habitat", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+str(noday8male)
+
+noday8male_plots <- noday8male %>% mutate(sugar= as.factor(sugar))
+
+#time for male albopictus - more male albopictus is sugar fed in the morning. 
+nomale_resselect_days_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+```
+
+
+```{r}
+#did not use
+#More females than males captured in the urban environment. #more male albopictus captured in the bush than in the urban habitat.
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x =sex, fill=habitat)) + geom_bar(position = "dodge")
+
+#time of day - more female captured in the afternoon 
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x =sex, fill=time)) + geom_bar(position = "dodge")
+
+#maybe look at fructose concentration by sex
+nd_TSI_data_2SD_plots %>% ggplot() + geom_point(aes(y= fructose_concentration, x=habitat, color = sex))
+
+nd_TSI_data_2SD_plots %>% ggplot() + geom_point(aes(y= sweeptime, x=habitat, color = time))
+
+#look at differences between time of day, sugar positive and sex - this one relates to the GLMM.#significant difference between sugar positive for (i) afternoon female - afternoon male (ii) morning female - afternoon male (iii) afternoon male - morning male. 
+
+#there was more sugar feeding in the afternoon than the morning. 
+
+#Sweeptime with habitat, filled with sex. Doesn't appear to be significantly different.
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=habitat, y=sweeptime)) + 
+  geom_point()
+
+#concentration of fructose by habitat type - no significant difference.
+nd_TSI_data_2SD_plots %>% ggplot() + 
+  geom_point(aes(x=habitat, y=fructose_concentration, color=sex))
+
+
+#fructose concentration - by male and female for each habitat type. Maybe difference between Male and Female for urban environment?
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=fructose_concentration)) + geom_bar(position="dodge") 
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#final figures examples
+```
+
+Examining all data station:day when catch was low (H_L)
+
+```{r}
+
+station <- nd_TSI_data_2SD_plots %>% 
+                         group_by(station) %>% 
+                         summarise(samp = n()) %>% as_tibble()
+
+describeBy(nd_TSI_data_2SD_plots, group = nd_TSI_data_2SD_plots$day)
+
+aggregate(formula = station ~ day + station,
+          data = nd_TSI_data_2SD_plots, FUN = sum)
+
+#median catch at each day at a given station. 
+
+#excel showed me that there was probably not a difference. Let's see what the model says
+
+
+H_L_data <- read.csv("H_L_TSI_data_albo_cutoff_2SD.csv")
+
+str(H_L_data)
+#convert the sugar integer to a factor
+
+H_L_data_plots <- H_L_data %>% mutate(sugar= as.factor(sugar))
+#confirm that this is now a factor. 
+
+H_L_data_plots_glmer <- glmer(sugar~ time*sex+habitat+catch_time_day + (1|day) + (1|station), family = binomial, data = H_L_data_plots)
+Anova(H_L_data_plots_glmer)
+
+#fructose concentration predicted by catch_median?
+
+H_L_data_lmer <- lmer(fructose_concentration ~ catch_median + (1|day) + (1|station), data = H_L_data_plots)
+Anova(H_L_data_lmer)
+
+# try just with males
+
+male_H_L_data <- read.csv("male_H_L_catch_TSI_data_albo_2SD.csv")
+
+male_H_L_data_plots <- male_H_L_data %>% mutate(sugar= as.factor(sugar))
+
+male_H_L_data_plots_glmer <- glmer(sugar ~ time+habitat+catch_time_day + (1|day) + (1|station), family = binomial, data = male_H_L_data_plots)
+Anova(male_H_L_data_plots_glmer)
+
+#try just with females
+
+female_H_L_data <- read.csv("female_H_L_catch_TSI_data_albo_2SD.csv")
+
+
+female_H_L_data_plots <- female_H_L_data %>% mutate(sugar= as.factor(sugar))
+
+female_H_L_data_plots_glmer <- glmer(sugar ~ time+habitat + catch_time_day + (1|day) + (1|station), family = binomial, data = female_H_L_data_plots)
+
+Anova(female_H_L_data_plots_glmer)
+
+```
+
+
+
+```{r}
+
+day_TSI_data_plots_visual_sum  %>% ggplot(mapping = aes(x=day, fill=sex)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Day", y = "Count", fill= "Sex") + scale_fill_discrete(labels= c("Female", "Male")) +theme_cowplot()
+
+
+day_TSI_data_plots_visual_sum %>% ggplot(mapping = aes(x=day, fill=samp)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+#this graph here shows proportion.
+day_TSI_data_plots_visual_sum %>% ggplot(mapping = aes(x=day, fill = samp)) + geom_bar(position="dodge") + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#plot of catch by day and station (counts) - facet_grid by sex.
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+```
+
+Figure 1: Count of sugar fed status by time of day for both male and female Aedes albopictus
+```{r}
+#1. Figure: Count of sugar fed status by time of day for both male and female Aedes albopictus. would be good to include the n in this. 
+#why are males more sugar fed in the morning compared to females?
+#think about a facet_grid for comparing count with sex, facetted by time of day. #this one shows that more females than males were captured in both the morning and afternoon.
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#this graph here shows proportion of sex sugar fed.
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#sex
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#time
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+
+#habitat
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
+```
+
+Figure 2: visual examination to detect sugar in mossies
+```{r}
+
+#Our visual examination was able to detect the presence of sugar for nearly all mossies that were clear. Unfed it could not dectet very well. 
+
+#count
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="dodge")+ labs(x= "Visual examination", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))
+
+#proportion.
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=contents, fill=sugar)) + geom_bar(position="fill")+ labs(x= "Visual examination", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) + theme_cowplot()
+
+```
+
+```{r}
+#Figure 3: Habitat, sex and sugar - not used 
+#count
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#add mean + standard error.
+
+#proportion
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot() 
+
+
+#try adding the geom_text information with the nd_TSI_plots_sum text 
+#ggplot(nd_TSI_data_plots, mapping = aes(x=sex, fill=sugar)) + geom_bar(position="dodge") + facet_grid(~fct_rev(habitat)) + labs(x= "Sex", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ geom_text_repel(data= nd_TSI_data_plots_sum, mapping = aes(label=samp, y= 50)) + theme_cowplot()
+
+
+#Fig x: time of day and sugar
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(position="fill") + labs(x= "time", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#Fig x: habitat with time of day
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + facet_grid(~fct_rev(time)) + labs(x= "habitat", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#habitat only 
+
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="dodge") + labs(x= "habitat", y = "Count", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+#Fig x: sex
+nd_TSI_data_2SD_plots %>% ggplot(mapping = aes(x=sex, fill=sugar)) + geom_bar(position="fill") + labs(x= "Sex", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive"))+ theme_cowplot()
+
+
+```
+
+
+```{r}
+
+min(TSI_data_positive$fructose_content)
+max(TSI_data_positive$fructose_content)
+
+positive_stats <- describeBy(TSI_data_positive, TSI_data_positive$fructose_content)
+
+model_fructose_content <- lmer(fructose_content ~ sex + habitat+ time+ flowers_binary + (1|day) + (1|station), data = TSI_data_positive)
+summary(model_fructose_content)
+summ(model_fructose_content)
+#summ to analyse the models
+
+Anova(model_fructose_content)
+
+plot(model_fructose_content)
+
+#check normality
+
+check_normality(model_fructose_content)
+#looks like significant deviation from normal
+
+shapiro.test(TSI_data_positive$fructose_content)
+
+#looks like this is highly normal.
+
+check_heteroscedasticity(model_fructose_content)
+
+check_heteroskedasticity(model_fructose_content)
+
+plot(model_fructose_content)
+
+#look at the model assumptions
+check_model(model_fructose_content)
+model_performance(model_fructose_content)
+
+performance_accuracy(model_fructose_content)
+
+check_autocorrelation(model_fructose_content)
+```
+
+Fitting a linear model to determine the impact of measured variables on fructose concentration for the positive mosquitoes 
+```{r}
+#use mosquitoes that were sugar fed to investigate this (using the TSI_data_positive.csv)
+
+TSI_data_positive <- read.csv("TSI_data_positive.csv")
+
+str(TSI_data_positive)
+
+model_fructose_concentration <- lmer(log(fructose_concentration) ~ sex + habitat+ time+ flowers_binary + (1|day) + (1|station), data = TSI_data_positive)
+summary(model_fructose_concentration)
+summ(model_fructose_concentration)
+#summ to analyse the models
+
+Anova(model_fructose_concentration)
+
+#check normality
+check_normality(model_fructose_concentration)
+
+plot(model_fructose_concentration)
+#using the log of fructose, because residuals fall either side of the line. 
+
+#significant differences in fructose concentration by sex.
+#what about by flowering sources?
+
+#do not need multiple comparisons for just one group.
+tukey_fructose_concentration <- emmeans(model_fructose_concentration, list(pairwise ~ sex+ time), adjust = "tukey")
+tukey_fructose_concentration
+
+#higher fructose concentration for the males than for the females.
+
+
+
+#only including positive mosquitoes, so you would need to filter this by positive only (and include bins for flowers)
+aggregate(formula = fructose_concentration ~ habitat + sex,
+          data = TSI_data_positive, FUN = sum)
+#looks like the males take lower concentration of fructose meals in the morning
+
+#by time - more concentrated sugar meals in the morning for males (what the model says). Not much difference for females.
+aggregate(formula = fructose_concentration ~ time + sex,
+          data = TSI_data_positive, FUN = sum)
+
+#by flowers - more concentrated sugar meals in the presence of flowers for females. No difference for males. 
+aggregate(formula = fructose_concentration ~ flowers_binary + sex,
+          data = TSI_data_positive, FUN = sum)
+
+
+```

@@ -5,6 +5,14 @@ editor_options:
 ---
 Scripts associated with data analysis for the Masig Island sugar feeding study.
 
+Load these packages for model testing
+
+```{r}
+library(tidyverse)
+library(performance)
+library(lme4)
+library(qqplotr)
+```
 
 Loading packages
 ```{r}
@@ -24,7 +32,6 @@ library(aods3)
 library(emmeans)
 library(dplyr)
 library(MuMIn)
-library(DHARMa)
 library(blmeco)
 library(cowplot)
 library(ResourceSelection)
@@ -37,6 +44,10 @@ library(jtools)
 library(sjPlot)
 library(stargazer)
 library(ggpubr)
+library(performance)
+library(see)
+library(broom)
+library(qqplotr)
 ```
 
 ```{r}
@@ -235,53 +246,31 @@ albo_female_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_ba
 
 ```
 
-Fitting a linear model to determine the impact of measured variables on fructose concentration for the positive mosquitoes 
+Fitting a linear model to determine the impact of measured variables on log fructose content for the positive mosquitoes 
+
 ```{r}
-#use mosquitoes that were sugar fed to investigate this (using the TSI_data_positive.csv)
 
-TSI_data_positive <- read.csv("TSI_data_positive.csv")
+logmodel_fructose_content <- lmer(log(fructose_content) ~ sex + habitat+ time+ flowers_binary + (1|day) + (1|station), data = TSI_data_positive)
+summary(logmodel_fructose_content)
+summ(logmodel_fructose_content)
+Anova(logmodel_fructose_content)
 
-str(TSI_data_positive)
+plot(logmodel_fructose_content)
 
-model_fructose_concentration <- lmer(log(fructose_concentration) ~ sex + habitat+ time+ flowers_binary + (1|day) + (1|station), data = TSI_data_positive)
-summary(model_fructose_concentration)
-summ(model_fructose_concentration)
-#summ to analyse the models
+#look at the model assumptions
 
-Anova(model_fructose_concentration)
+check_model(logmodel_fructose_content)
+#only works with some packages loaded. The log fructose content is defo the way to go. The not logged one violates a number of these assumptions.
 
-plot(model_fructose_concentration)
-#using the log of fructose, because residuals fall either side of the line. 
+model_performance(logmodel_fructose_content)
+#lower AIC weight than model w/o log.
 
-#significant differences in fructose concentration by sex.
-#what about by flowering sources?
+tab_model(logmodel_fructose_content, show.se = T)
 
-#do not need multiple comparisons for just one group.
-tukey_fructose_concentration <- emmeans(model_fructose_concentration, list(pairwise ~ sex+ time), adjust = "tukey")
-tukey_fructose_concentration
-
-#higher fructose concentration for the males than for the females.
-
-tab_model(model_fructose_concentration, show.stat = T, show.est = T, show.se = T, show.intercept = T, show.fstat = T)
-
-
-#only including positive mosquitoes, so you would need to filter this by positive only (and include bins for flowers)
-aggregate(formula = fructose_concentration ~ habitat + sex,
-          data = TSI_data_positive, FUN = sum)
-#looks like the males take lower concentration of fructose meals in the morning
-
-#by time - more concentrated sugar meals in the morning for males (what the model says). Not much difference for females.
-aggregate(formula = fructose_concentration ~ time + sex,
-          data = TSI_data_positive, FUN = sum)
-
-#by flowers - more concentrated sugar meals in the presence of flowers for females. No difference for males. 
-aggregate(formula = fructose_concentration ~ flowers_binary + sex,
-          data = TSI_data_positive, FUN = sum)
-
-
+#sex [Male] has significantly lower fructose content than female.
 ```
 
-Plot of fructose concentration by sex
+Plot of fructose content by sex
 ```{r}
 #overall figure
 
@@ -289,7 +278,7 @@ Plot of fructose concentration by sex
 TSI_data_positive$time2 <- factor(TSI_data_positive$time, levels=c("Morning", "Afternoon"))
 
 #Fig b
-TSI_data_positive %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration), fill = time2)) + scale_fill_discrete(limits=positions_time) + geom_boxplot() + labs(x= "Sex", y = "log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
+TSI_data_positive %>% ggplot(mapping = aes(x=sex, y=log(fructose_content), fill = time2)) + scale_fill_discrete(limits=positions_time) + geom_boxplot() + labs(x="", y=expression("log fructose content ("~mu*"g)"), fill ="Time") + theme_cowplot()
 ```
 
 Model for males and females (to avoid the simpson's paradox)
@@ -304,23 +293,31 @@ TSI_male_positive_n <- TSI_male_positive %>%
                         group_by(habitat, time) %>%
                         summarise(samp = n())
 
-male_fructose_concentration <- lmer(log(fructose_concentration) ~ time+habitat+flowers_binary + (1|day) + (1|station), data = TSI_male_positive)
+male_fructose_content <- lmer(log(fructose_content) ~ time+habitat+flowers_binary + (1|day) + (1|station), data = TSI_male_positive)
+
 
 #log transforming the fructose makes a big difference. This suggests that the fructose concentration varies by time of day for the males. 
 plot(male_fructose_concentration)
 
-Anova(male_fructose_concentration)
-summ(male_fructose_concentration)
 
-male_time_habitat <- emmeans(male_fructose_concentration, list(pairwise ~ time), adjust = "tukey")
+model_performance(male_fructose_content)
+
+Anova(male_fructose_content)
+summ(male_fructose_content)
+
+male_time_habitat <- emmeans(male_fructose_content, list(pairwise ~ time), adjust = "tukey")
 male_time_habitat
-#significantly higher fructose concentration in the morning than the afternoon for males. 
+#significantly higher fructose content in the morning than the afternoon for males. 
+
+tab_model(male_fructose_content, show.se = T)
+
+
 ```
 
 ggplot of fructose concentration for the males
 ```{r}
 
-TSI_male_positive %>% ggplot(mapping = aes(x=time, y=log(fructose_concentration))) +geom_point() + geom_boxplot() + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "log Fructose concentration (ug/uL)") + theme_cowplot()
+TSI_male_positive %>% ggplot(mapping = aes(x=time, y=log(fructose_content))) +geom_point() + geom_boxplot() + scale_x_discrete(limits=positions_time) + labs(x= "Time", y = "log fructose content (ug/uL)") + theme_cowplot()
 ```
 
 Females only positive
@@ -331,7 +328,7 @@ str(TSI_female_positive)
 
 #log fructose concentration and add as a new column.I should try this.
 
-female_fructose <- lmer(log(fructose_concentration) ~ time+habitat+flowers_binary + (1|day) + (1|station), data = TSI_female_positive)
+female_fructose <- lmer(log(fructose_content) ~ time+habitat+flowers_binary + (1|day) + (1|station), data = TSI_female_positive)
 Anova(female_fructose)
 summary(female_fructose)
 
@@ -340,6 +337,10 @@ summ(female_fructose)
 plot(female_fructose)
 
 #not significant higher fructose concentration in the morning than the afternoon for females. 
+
+model_performance(female_fructose)
+
+tab_model(female_fructose, show.se = T)
 
 ```
 
@@ -380,25 +381,29 @@ male_negatives <- albo_male_female_negatives %>% filter(sex == "Male")
 
 ```
 
-Try to plot the two datasets on one graph
+Fructose content with the field data + the lab cut-offs
 
 ```{r}
 
 ggplot() + geom_point(data= female_albo_data_cutoff, aes(x=sex, y=log(fructose_concentration)), position = "jitter", colour = "grey") + geom_point(data = albo_male_female_negatives, aes(x=sex, y=log(fructose_concentration)), position = "jitter", colour = "red")
 
 #try the female with the cut offs
-albo_female_with_negatives <- albo_data_cutoff %>% filter(sex == "Female") %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_point(data= female_negatives, position = "jitter", color = "orange")+ geom_hline(yintercept=log(0.001775502), lty="solid", col = "red")+ geom_hline(yintercept = log(0.004800524), lty="dotted", col = "red")+ geom_hline(yintercept = log(0.006951006), lty="longdash", col = "red") + geom_hline(yintercept = log(0.009538758), lty="twodash", col = "red") + labs(x= "", y = "Log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot()
+albo_female_with_negatives <- albo_data_cutoff %>% filter(sex == "Female") %>% ggplot(mapping = aes(x=sex, y=log(fructose_content)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_point(data= female_negatives, position = "jitter", color = "orange")+ geom_hline(yintercept=log(0.754588483), lty="solid", col = "red")+ geom_hline(yintercept = log(1.854383075), lty="dotted", col = "red")+ geom_hline(yintercept = log(2.954177668), lty="longdash", col = "red") + geom_hline(yintercept = log(4.05397226), lty="twodash", col = "red") + labs(x= "", y = "Log fructose content ("~mu*"g)", fill ="Time") + theme_cowplot()
 
-#scale_y_continuous(limits = c(-6.5, 0))
+#+ scale_y_continuous(limits = c(-6.5, 0))
   
   
 #try the male with the cutoffs
 
-albo_male_with_negatives <- albo_data_cutoff %>% filter(sex == "Male") %>% ggplot(mapping = aes(x=sex, y=log(fructose_concentration)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_point(data = male_negatives, position = "jitter", color = "orange") + geom_hline(yintercept=log(0.001430095), lty="solid", col = "red")+ geom_hline(yintercept = log(0.003445098), lty="dotted", col = "red")+ geom_hline(yintercept = log(0.0054601), lty="longdash", col = "red") + geom_hline(yintercept = log(0.007475102), lty="twodash", col = "red") + labs(x= "", y = "Log fructose concentration (ug/uL)", fill ="Time") + theme_cowplot() 
+albo_male_with_negatives <- albo_data_cutoff %>% filter(sex == "Male") %>% ggplot(mapping = aes(x=sex, y=log(fructose_content)))+ geom_boxplot()+ geom_point(position = "jitter") + geom_point(data = male_negatives, position = "jitter", color = "orange") + geom_hline(yintercept=log(0.60779043), lty="solid", col = "red")+ geom_hline(yintercept = log(1.464166454), lty="dotted", col = "red")+ geom_hline(yintercept = log(2.320542478), lty="longdash", col = "red") + geom_hline(yintercept = log(3.176918502), lty="twodash", col = "red") + labs(x= "", y = "Log fructose content ("~mu*"g)", fill ="Time") + theme_cowplot() 
 
 ggarrange(albo_female_with_negatives,albo_male_with_negatives)
+
+#change this to content if you want to include in ms.
+
 ```
 
+This one is with the field data only showing fructose concentration
 ```{r}
 #maybe just do by females and then by males and then facet_wrap the two together.
 

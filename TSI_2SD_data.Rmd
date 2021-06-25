@@ -72,6 +72,13 @@ Summary statistics
 
 ```{r}
 
+# proportion sugar fed at each habitat
+
+habitat_sugar_per_station <- nd_TSI_data_2SD_plots %>% 
+                      group_by(habitat, sex, sugar) %>%
+                      summarise(samp = n()) %>%
+                      mutate(percent=prop.table(samp)*100)
+
 #proportion sugar fed at each station
 
 sugar_per_station <- nd_TSI_data_2SD_plots %>% 
@@ -100,8 +107,6 @@ nd_TSI_data_plots_visual_sum <- nd_TSI_data_2SD_plots %>%
 nd_TSI_data_plots_visual_sum <- nd_TSI_data_2SD_plots %>% 
                          group_by(sugar, sex, time) %>% 
                          summarise(samp = n())
-
-
 
 #get the sum of mosquitoes captured by day ,station and sex
 
@@ -198,6 +203,18 @@ albo_male_2SD_plots %>% ggplot(mapping = aes(x=time, fill=sugar)) + geom_bar(pos
 #habitat for male albopictus
 albo_male_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(position="fill") + labs(x= "Habitat", y = "Proportion", fill= "Sugar fed") + scale_fill_discrete(labels= c("Negative", "Positive")) +theme_cowplot()
 
+#%sugar fed AM and PM
+                      time_sugar <- albo_male_2SD_plots %>% 
+                      group_by(time, sugar) %>%
+                      summarise(samp = n()) %>%
+                      mutate(percent=prop.table(samp)*100)
+
+#habitat_sugar                      
+                      habitat_sugar_male <- albo_male_2SD_plots %>% 
+                      group_by(habitat, sugar) %>%
+                      summarise(samp = n()) %>%
+                      mutate(percent=prop.table(samp)*100)                      
+                      
 ```
 
 Plotting the female 2 SD data
@@ -243,7 +260,17 @@ albo_female_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_ba
 
 #plot of proportion sugar fed by flowers_binary_bins
 
+#%sugar fed AM and PM
+                      time_sugar_female <- albo_female_2SD_plots %>% 
+                      group_by(time, sugar) %>%
+                      summarise(samp = n()) %>%
+                      mutate(percent=prop.table(samp)*100)
 
+#habitat_sugar                      
+                      habitat_sugar_female <- albo_female_2SD_plots %>% 
+                      group_by(habitat, sugar) %>%
+                      summarise(samp = n()) %>%
+                      mutate(percent=prop.table(samp)*100)
 ```
 
 Fitting a linear model to determine the impact of measured variables on log fructose content for the positive mosquitoes 
@@ -268,6 +295,9 @@ model_performance(logmodel_fructose_content)
 tab_model(logmodel_fructose_content, show.se = T)
 
 #sex [Male] has significantly lower fructose content than female.
+
+overall_fructose_content_habitat <- describeBy(TSI_data_positive, TSI_data_positive$time)
+
 ```
 
 Plot of fructose content by sex
@@ -292,6 +322,15 @@ str(TSI_male_positive)
 TSI_male_positive_n <- TSI_male_positive %>%
                         group_by(habitat, time) %>%
                         summarise(samp = n())
+
+#summarise average fructose content by different categories
+
+male_fructose_content_habitat <- describeBy(TSI_male_positive, TSI_male_positive$habitat)
+
+male_fructose_content_time <- describeBy(TSI_male_positive, TSI_male_positive$time)
+  
+male_fructose_content_time_flower <- describeBy(TSI_male_positive, TSI_male_positive$flowers_binary) 
+
 
 male_fructose_content <- lmer(log(fructose_content) ~ time+habitat+flowers_binary + (1|day) + (1|station), data = TSI_male_positive)
 
@@ -325,6 +364,13 @@ Females only positive
 
 TSI_female_positive <- read.csv("Female_2SD_positive.csv")
 str(TSI_female_positive)
+
+female_fructose_content_habitat <- describeBy(TSI_female_positive, TSI_female_positive$habitat)
+
+female_fructose_content_time <- describeBy(TSI_female_positive, TSI_female_positive$time)
+  
+female_fructose_content_time_flower <- describeBy(TSI_female_positive, TSI_female_positive$flowers_binary)  
+
 
 #log fructose concentration and add as a new column.I should try this.
 
@@ -453,5 +499,6 @@ nd_TSI_data_plots_sum <- nd_TSI_data_2SD_plots %>%
                          summarise(samp = n())
   
 nd_TSI_data_plots_sum
+
 ```
 

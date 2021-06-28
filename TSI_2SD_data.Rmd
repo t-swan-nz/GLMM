@@ -331,6 +331,8 @@ male_fructose_content_time <- describeBy(TSI_male_positive, TSI_male_positive$ti
   
 male_fructose_content_time_flower <- describeBy(TSI_male_positive, TSI_male_positive$flowers_binary) 
 
+male_fructose_content_physiological <- describeBy(TSI_male_positive, TSI_male_positive$contents)
+
 
 male_fructose_content <- lmer(log(fructose_content) ~ time+habitat+flowers_binary + (1|day) + (1|station), data = TSI_male_positive)
 
@@ -370,6 +372,9 @@ female_fructose_content_habitat <- describeBy(TSI_female_positive, TSI_female_po
 female_fructose_content_time <- describeBy(TSI_female_positive, TSI_female_positive$time)
   
 female_fructose_content_time_flower <- describeBy(TSI_female_positive, TSI_female_positive$flowers_binary)  
+
+female_fructose_content_physiological <- describeBy(TSI_female_positive, TSI_female_positive$contents)
+
 
 
 #log fructose concentration and add as a new column.I should try this.

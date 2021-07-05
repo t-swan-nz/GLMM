@@ -5,7 +5,7 @@ editor_options:
 ---
 Scripts associated with data analysis for the Masig Island sugar feeding study.
 
-Load these packages for model testing
+Load these packages for model testing only (not compatabile with the other chunk of packages)
 
 ```{r}
 library(tidyverse)
@@ -172,7 +172,13 @@ coef(albo_TSI_data_2SD_glmer)
 
 Plotting the male 2 SD data
 ```{r}
-albo_male_2SD <- read.csv(file = "TSI_data_albo_male_2SD.csv")
+
+#filter this by the male data, instead of importing another sheet.
+
+albo_male_2SD <- albo_TSI_data_2SD %>% filter(sex == "Male")
+
+#old way before filtering
+#albo_male_2SD <- read.csv(file = "TSI_data_albo_male_2SD.csv")
 
 albo_male_2SD_plots <- albo_male_2SD %>% mutate(sugar= as.factor(sugar))
 
@@ -219,9 +225,12 @@ albo_male_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(
 
 Plotting the female 2 SD data
 ```{r}
+
+albo_female_2SD <- albo_TSI_data_2SD %>% filter(sex == "Female")
+
 #Import the data
 
-albo_female_2SD <- read.csv(file = "TSI_data_albo_female_2SD.csv")
+#albo_female_2SD <- read.csv(file = "TSI_data_albo_female_2SD.csv")
 
 #convert this to a factor
 
@@ -273,6 +282,14 @@ albo_female_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_ba
                       mutate(percent=prop.table(samp)*100)
 ```
 
+Importing the TSI_data_positive
+```{r}
+
+TSI_data_positive <- albo_TSI_data_2SD %>% filter(sugar =="1")
+
+```
+
+
 Fitting a linear model to determine the impact of measured variables on log fructose content for the positive mosquitoes 
 
 ```{r}
@@ -315,8 +332,11 @@ Model for males and females (to avoid the simpson's paradox)
 
 Males only positive
 ```{r}
+#import male only data
 
-TSI_male_positive <- read.csv("Male_2SD_positive.csv")
+TSI_male_positive <- albo_TSI_data_2SD %>% filter(sex =="Male", sugar == "1")
+
+#TSI_male_positive <- read.csv("Male_2SD_positive.csv")
 str(TSI_male_positive)
 
 TSI_male_positive_n <- TSI_male_positive %>%
@@ -338,7 +358,7 @@ male_fructose_content <- lmer(log(fructose_content) ~ time+habitat+flowers_binar
 
 
 #log transforming the fructose makes a big difference. This suggests that the fructose concentration varies by time of day for the males. 
-plot(male_fructose_concentration)
+plot(male_fructose_content)
 
 
 model_performance(male_fructose_content)
@@ -363,8 +383,10 @@ TSI_male_positive %>% ggplot(mapping = aes(x=time, y=log(fructose_content))) +ge
 
 Females only positive
 ```{r}
+#importing the data
+TSI_female_positive <- albo_TSI_data_2SD %>% filter(sex =="Female", sugar == "1")
 
-TSI_female_positive <- read.csv("Female_2SD_positive.csv")
+#TSI_female_positive <- read.csv("Female_2SD_positive.csv")
 str(TSI_female_positive)
 
 female_fructose_content_habitat <- describeBy(TSI_female_positive, TSI_female_positive$habitat)
@@ -375,9 +397,7 @@ female_fructose_content_time_flower <- describeBy(TSI_female_positive, TSI_femal
 
 female_fructose_content_physiological <- describeBy(TSI_female_positive, TSI_female_positive$contents)
 
-
-
-#log fructose concentration and add as a new column.I should try this.
+#log fructose content and add as a new column.I should try this.
 
 female_fructose <- lmer(log(fructose_content) ~ time+habitat+flowers_binary + (1|day) + (1|station), data = TSI_female_positive)
 Anova(female_fructose)

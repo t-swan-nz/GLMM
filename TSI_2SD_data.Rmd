@@ -166,8 +166,17 @@ tab_model(albo_TSI_data_2SD_glmer, show.se = T)
 
 coef(albo_TSI_data_2SD_glmer)
 
+```
 
+GLMM for a model with EFNs (overall model)
 
+```{r}
+albo_TSI_EFN_model_glmer <- glmer(sugar ~ time+sex+habitat+EFN+(1|day) + (1|station), family = binomial, data = albo_TSI_data_2SD)
+Anova(albo_TSI_EFN_model_glmer)
+
+#when I run all the variables in the model - the EFN does not come out. This warning 'fixed-effect model matrix is rank deficient so dropping 1 column / coefficient'. The EFN does not occur in the woodland habitats, so not able to have a valid comparison. 
+
+#insignificant - p = 0.09
 ```
 
 Plotting the male 2 SD data
@@ -221,6 +230,18 @@ albo_male_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_bar(
                       summarise(samp = n()) %>%
                       mutate(percent=prop.table(samp)*100)                      
                       
+```
+
+GLMM for a model with males only EFNs (male-only model)
+
+```{r}
+EFN_male_only_2SD <- glmer(sugar ~ EFN+(1|day) + (1|station), family = binomial, data = albo_male_2SD)
+summary(EFN_male_only_2SD)
+Anova(EFN_male_only_2SD)
+
+#when I run all the variables in the model - the EFN does not come out. This warning 'fixed-effect model matrix is rank deficient so dropping 1 column / coefficient'. The EFN does not occur in the woodland habitats, so not able to have a valid comparison. 
+
+#highly insignificant.
 ```
 
 Plotting the female 2 SD data
@@ -282,6 +303,19 @@ albo_female_2SD_plots %>% ggplot(mapping = aes(x=habitat, fill=sugar)) + geom_ba
                       mutate(percent=prop.table(samp)*100)
 ```
 
+GLMM for a model with females only EFNs (female-only model)
+
+```{r}
+EFN_female_only_2SD <- glmer(sugar ~ time+habitat+ EFN+(1|day) + (1|station), family = binomial, data = albo_female_2SD)
+summary(EFN_female_only_2SD)
+summ(EFN_female_only_2SD)
+Anova(EFN_female_only_2SD)
+
+#when I run all the variables in the model - the EFN does not come out. This warning 'fixed-effect model matrix is rank deficient so dropping 1 column / coefficient'. The EFN does not occur in the woodland habitats, so not able to have a valid comparison. 
+
+#highly insignificant.
+```
+
 Importing the TSI_data_positive
 ```{r}
 
@@ -314,6 +348,16 @@ tab_model(logmodel_fructose_content, show.se = T)
 #sex [Male] has significantly lower fructose content than female.
 
 overall_fructose_content_habitat <- describeBy(TSI_data_positive, TSI_data_positive$time)
+
+```
+
+Fitting EFNs with the log model
+```{r}
+EFN_logmodel_fructose_content <- lmer(log(fructose_content) ~ EFN + (1|day) + (1|station), data = TSI_data_positive)
+summary(EFN_logmodel_fructose_content)
+summ(EFN_logmodel_fructose_content)
+Anova(EFN_logmodel_fructose_content)
+
 
 ```
 
@@ -414,6 +458,14 @@ model_performance(female_fructose)
 tab_model(female_fructose, show.se = T)
 
 ```
+
+Females only fitting EFN by log fructose content
+
+```{r}
+EFN_female_fructose <- lmer(log(fructose_content) ~ EFN + (1|day) + (1|station), data = TSI_female_positive)
+Anova(EFN_female_fructose)
+```
+
 
 Figure 2: visual examination to detect sugar in mossies
 ```{r}
@@ -525,5 +577,14 @@ nd_TSI_data_plots_sum <- nd_TSI_data_2SD_plots %>%
   
 nd_TSI_data_plots_sum
 
+```
+
+```{r}
+
+versionInfo(RStudio.Version())
+
+RStudio.Version()
+
+citation()
 ```
 

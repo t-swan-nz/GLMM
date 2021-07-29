@@ -316,6 +316,15 @@ Anova(EFN_female_only_2SD)
 #highly insignificant.
 ```
 
+EFN only 
+
+```{r}
+EFN_only_female_only_2SD <- glmer(sugar ~ flowers_binary+(1|day) + (1|station), family = binomial, data = albo_female_2SD)
+summary(EFN_only_female_only_2SD)
+summ(EFN_only_female_only_2SD)
+Anova(EFN_only_female_only_2SD)
+```
+
 Importing the TSI_data_positive
 ```{r}
 
@@ -358,7 +367,6 @@ summary(EFN_logmodel_fructose_content)
 summ(EFN_logmodel_fructose_content)
 Anova(EFN_logmodel_fructose_content)
 
-
 ```
 
 Plot of fructose content by sex
@@ -370,6 +378,10 @@ TSI_data_positive$time2 <- factor(TSI_data_positive$time, levels=c("Morning", "A
 
 #Fig b
 TSI_data_positive %>% ggplot(mapping = aes(x=sex, y=log(fructose_content), fill = time2)) + scale_fill_discrete(limits=positions_time) + geom_boxplot() + labs(x="", y=expression("log fructose content ("~mu*"g)"), fill ="Time") + theme_cowplot()
+
+#save as a .svg
+
+#save_plot("Fig 4.svg")
 ```
 
 Model for males and females (to avoid the simpson's paradox)
@@ -465,7 +477,6 @@ Females only fitting EFN by log fructose content
 EFN_female_fructose <- lmer(log(fructose_content) ~ EFN + (1|day) + (1|station), data = TSI_female_positive)
 Anova(EFN_female_fructose)
 ```
-
 
 Figure 2: visual examination to detect sugar in mossies
 ```{r}
